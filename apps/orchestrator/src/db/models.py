@@ -88,6 +88,24 @@ class Review(Base):
     page: Mapped["Page"] = relationship(back_populates="reviews")
 
 
+class SpecGenHistory(Base):
+    __tablename__ = "spec_gen_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String, nullable=False)
+    page_id: Mapped[str] = mapped_column(String, nullable=False)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    php_path: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    operations_count: Mapped[int] = mapped_column(Integer, default=0)
+    business_rules_count: Mapped[int] = mapped_column(Integer, default=0)
+    test_scenarios_count: Mapped[int] = mapped_column(Integer, default=0)
+    cost: Mapped[float] = mapped_column(Float, default=0.0)
+    spec_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class CostLog(Base):
     __tablename__ = "cost_log"
 

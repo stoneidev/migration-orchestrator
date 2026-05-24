@@ -10,6 +10,8 @@ from src.workers.mcp import MCPWorker
 from src.workers.analysis import AnalysisWorker
 from src.api.ws.events import event_bus
 from src.config import Settings
+from src.db.deps import _SessionFactory
+from src.db.models import SpecGenHistory
 
 router = APIRouter()
 
@@ -87,10 +89,59 @@ async def step3_generate(request: SpecGenStepRequest, background_tasks: Backgrou
     return {"success": True, "data": {"message": "Generating spec...", "step": 3}}
 
 
+@router.get("/spec-gen/history")
+async def get_history():
+    if _SessionFactory is None:
+        return {"success": True, "data": []}
+    with _SessionFactory() as db:
+        records = db.query(SpecGenHistory).order_by(SpecGenHistory.created_at.desc()).limit(50).all()
+        return {
+            "success": True,
+            "data": [
+                {
+                    "session_id": r.session_id,
+                    "page_id": r.page_id,
+                    "url": r.url,
+                    "php_path": r.php_path,
+                    "status": r.status,
+                    "operations": r.operations_count,
+                    "business_rules": r.business_rules_count,
+                    "test_scenarios": r.test_scenarios_count,
+                    "cost": r.cost,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in records
+            ],
+        }
+
+
 @router.get("/spec-gen/{session_id}")
 async def get_session_status(session_id: str):
     session = _get_session(session_id)
     return {"success": True, "data": session}
+
+
+def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
+    if _SessionFactory is None:
+        return
+    try:
+        with _SessionFactory() as db:
+            record = SpecGenHistory(
+                session_id=session_id,
+                page_id=session.get("page_id", ""),
+                url=session.get("url", ""),
+                php_path=session.get("php_path", ""),
+                status="complete",
+                operations_count=len(spec.get("operations", [])),
+                business_rules_count=len(spec.get("business_rules", [])),
+                test_scenarios_count=len(spec.get("test_scenarios", [])),
+                cost=session.get("cost", 0.0),
+                spec_path=spec_path,
+            )
+            db.add(record)
+            db.commit()
+    except Exception:
+        pass
 
 
 # ---- Background Tasks ----
@@ -274,6 +325,9 @@ Be thorough and specific based on the PHP analysis data. All business rules shou
             session["spec"] = spec
             session["status"] = "complete"
             session["cost"] = result.cost
+
+            # Save to DB
+            _save_history(session_id, session, spec, str(output_file))
 
             event_bus.emit("spec_gen:step_completed", {
                 "session_id": session_id, "step": 3, "status": "success",

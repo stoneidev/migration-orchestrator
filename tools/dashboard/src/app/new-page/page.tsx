@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 const API = "http://localhost:8000";
@@ -12,7 +12,12 @@ export default function NewPageSpec() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
   const { events } = useWebSocket();
+
+  useEffect(() => {
+    fetch(`${API}/api/spec-gen/history`).then(r => r.json()).then(d => setHistory(d.data || [])).catch(() => {});
+  }, [session?.status]);
 
   async function fetchSession(sid: string) {
     const res = await fetch(`${API}/api/spec-gen/${sid}`);
@@ -56,9 +61,24 @@ export default function NewPageSpec() {
 
   const stepStatus = (step: number) => {
     if (!session) return "pending";
-    if (session.step > step) return "done";
+    // Step completion is determined by session status progression
+    const statusMap: Record<string, number> = {
+      "ready": 0,
+      "capturing": 1,
+      "captured": 1,
+      "analyzing": 2,
+      "analyzed": 2,
+      "generating": 3,
+      "complete": 3,
+    };
+    const completedStep = statusMap[session.status] || 0;
+    const isStepDone = (step === 1 && ["captured", "analyzed", "analyzing", "generating", "complete"].includes(session.status)) ||
+                       (step === 2 && ["analyzed", "generating", "complete"].includes(session.status)) ||
+                       (step === 3 && session.status === "complete");
+
+    if (isStepDone) return "done";
     if (session.step === step && loading) return "running";
-    if (session.step === step && session.status === "error") return "error";
+    if (session.status === "error" && session.step === step) return "error";
     return "pending";
   };
 
@@ -186,6 +206,35 @@ export default function NewPageSpec() {
               </div>
             )}
           </>
+        )}
+
+        {/* History */}
+        {history.length > 0 && (
+          <div className="table-wrap" style={{ marginTop: 20 }}>
+            <div className="table-toolbar">
+              <h3>Generation History</h3>
+            </div>
+            <table>
+              <thead>
+                <tr><th>Page ID</th><th>URL</th><th>PHP Path</th><th>Status</th><th>Ops</th><th>BRs</th><th>TSs</th><th>Cost</th><th>Created</th></tr>
+              </thead>
+              <tbody>
+                {history.map((h: any, i: number) => (
+                  <tr key={i}>
+                    <td className="td-mono">{h.page_id}</td>
+                    <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{h.url}</td>
+                    <td className="td-mono" style={{ fontSize: 10 }}>{h.php_path}</td>
+                    <td><span className={`status status-${h.status === "complete" ? "complete" : "failed"}`}>{h.status}</span></td>
+                    <td>{h.operations}</td>
+                    <td>{h.business_rules}</td>
+                    <td>{h.test_scenarios}</td>
+                    <td>${(h.cost || 0).toFixed(4)}</td>
+                    <td style={{ fontSize: 10 }}>{h.created_at?.slice(0, 19)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Live Events */}
