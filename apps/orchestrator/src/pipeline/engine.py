@@ -83,6 +83,65 @@ class PipelineEngine:
             page.completed_at = datetime.utcnow()
             session.commit()
 
+    async def run_next_step(self, page_id: str) -> None:
+        with self.session_factory() as session:
+            page = session.get(Page, page_id)
+            if page is None:
+                return
+
+            if page.migration_status == "queued":
+                page.migration_status = PageState.RUNNING.value
+                page.started_at = datetime.utcnow()
+                session.flush()
+
+            next_step_num = page.current_step + 1
+            step = next((s for s in self.steps if s.step_number == next_step_num), None)
+            if step is None:
+                page.migration_status = PageState.COMPLETE.value
+                page.completed_at = datetime.utcnow()
+                session.commit()
+                return
+
+            context = await self._rebuild_context(page, session)
+
+            event_bus.emit("pipeline:step_started", {"page_id": page_id, "step": step.step_number, "step_name": step.name})
+            result = await self._execute_step(step, page, context, session)
+
+            if result.success:
+                self._update_context_from_result(context, step, result)
+                if next_step_num == 9:
+                    page.migration_status = PageState.COMPLETE.value
+                    page.completed_at = datetime.utcnow()
+                session.commit()
+                event_bus.emit("pipeline:step_completed", {
+                    "page_id": page_id, "step": step.step_number,
+                    "status": "passed", "next_step": next_step_num + 1,
+                })
+            else:
+                page.migration_status = PageState.BLOCKED.value
+                session.commit()
+
+    async def _rebuild_context(self, page: Page, session: Session) -> StepContext:
+        context = StepContext(page_id=page.id)
+        from src.pipeline.steps.step1_spec_load import load_spec
+        from src.config import Settings
+
+        settings = Settings()
+        try:
+            spec = load_spec(page.id, specs_dir=settings.specs_dir)
+            context.spec = spec
+        except Exception:
+            pass
+
+        artifacts = session.query(Artifact).filter_by(page_id=page.id, artifact_type="api_contract").first()
+        if artifacts:
+            from pathlib import Path
+            contract_path = Path(artifacts.file_path)
+            if contract_path.exists():
+                context.api_contract = contract_path.read_text()
+
+        return context
+
     async def _execute_step(
         self, step: BaseStep, page: Page, context: StepContext, session: Session
     ) -> StepResult:
