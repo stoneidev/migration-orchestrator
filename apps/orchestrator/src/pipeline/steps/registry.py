@@ -6,6 +6,10 @@ from src.pipeline.steps.step2_spec_verify import verify_spec
 from src.pipeline.steps.step3_api_contract import generate_api_contract
 from src.pipeline.steps.step4_react_gen import generate_react
 from src.pipeline.steps.step5_java_gen import generate_java
+from src.pipeline.steps.step6_java_test import generate_java_tests
+from src.pipeline.steps.step7_integration import check_integration
+from src.pipeline.steps.step8_equivalence import check_equivalence
+from src.pipeline.steps.step9_complete import complete_migration
 from src.workers.mcp import MCPWorker
 from src.config import Settings
 
@@ -123,6 +127,82 @@ class Step5JavaGen(BaseStep):
         return StepResult(success=False, error=result.error)
 
 
+class Step6JavaTest(BaseStep):
+    name = "java_test"
+    step_number = 6
+
+    def __init__(self, output_base: Path):
+        self.output_base = output_base
+
+    async def execute(self, context: StepContext) -> StepResult:
+        if context.spec is None:
+            return StepResult(success=False, error="Missing spec in context")
+
+        java_files = context.generated_files.get("java_generation", [])
+        output_dir = self.output_base / context.page_id.replace(".", "/")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        result = await generate_java_tests(
+            spec=context.spec,
+            java_files=java_files,
+            output_dir=output_dir,
+        )
+        if result.success:
+            return StepResult(success=True, artifacts={"files": result.test_files}, model_used="sonnet")
+        return StepResult(success=False, error=result.error)
+
+
+class Step7Integration(BaseStep):
+    name = "integration_test"
+    step_number = 7
+
+    async def execute(self, context: StepContext) -> StepResult:
+        if context.spec is None or context.api_contract is None:
+            return StepResult(success=False, error="Missing spec or api_contract")
+
+        react_files = context.generated_files.get("react_generation", [])
+        java_files = context.generated_files.get("java_generation", [])
+
+        result = await check_integration(
+            spec=context.spec,
+            api_contract=context.api_contract,
+            react_files=react_files,
+            java_files=java_files,
+        )
+        return StepResult(success=result.success, artifacts={"report": result.report})
+
+
+class Step8Equivalence(BaseStep):
+    name = "equivalence_check"
+    step_number = 8
+
+    def __init__(self, mcp_server_path: Path):
+        self.mcp_server_path = mcp_server_path
+
+    async def execute(self, context: StepContext) -> StepResult:
+        if context.spec is None:
+            return StepResult(success=False, error="Missing spec")
+
+        java_files = context.generated_files.get("java_generation", [])
+        result = await check_equivalence(
+            spec=context.spec,
+            java_files=java_files,
+        )
+        return StepResult(
+            success=result.success,
+            artifacts={"covered": result.covered, "missing": result.missing},
+        )
+
+
+class Step9Complete(BaseStep):
+    name = "complete"
+    step_number = 9
+
+    async def execute(self, context: StepContext) -> StepResult:
+        result = await complete_migration(page_id=context.page_id)
+        return StepResult(success=result.success, artifacts={"message": result.message})
+
+
 def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
     return [
         Step1SpecLoad(specs_dir=settings.specs_dir),
@@ -130,4 +210,8 @@ def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
         Step3ApiContract(),
         Step4ReactGen(output_base=Path("apps/frontend/src/app/admin")),
         Step5JavaGen(output_base=Path("apps/backend/src/main/java")),
+        Step6JavaTest(output_base=Path("apps/backend/src/test/java")),
+        Step7Integration(),
+        Step8Equivalence(mcp_server_path=settings.mcp_server_path),
+        Step9Complete(),
     ]
