@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes.pages import router as pages_router
 from src.api.routes.pipeline import router as pipeline_router
+from src.api.routes.project import router as project_router
 from src.api.ws.events import event_bus
 from src.db.deps import get_db  # noqa: F401 — re-export for tests
 
@@ -18,6 +19,7 @@ app.add_middleware(
 
 app.include_router(pages_router, prefix="/api")
 app.include_router(pipeline_router, prefix="/api")
+app.include_router(project_router, prefix="/api")
 
 
 @app.get("/api/health")

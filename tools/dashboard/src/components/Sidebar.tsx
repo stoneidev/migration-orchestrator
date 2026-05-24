@@ -21,6 +21,9 @@ const navItems = [
   { group: "Intelligence", items: [
     { href: "/patterns", label: "Patterns", count: "142" },
   ]},
+  { group: "System", items: [
+    { href: "/settings", label: "Settings" },
+  ]},
 ];
 
 export function Sidebar() {
