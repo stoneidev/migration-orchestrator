@@ -1422,7 +1422,7 @@
 
 <footer class="deck-footer">
   <div class="footer-progress"><div class="footer-progress-fill" id="progress"></div></div>
-  <span class="footer-counter" id="counter">01 / 43</span>
+  <span class="footer-counter" id="counter">01 / 49</span>
 </footer>
 
 <div class="speaker-note" id="speakerNote"></div>
@@ -1535,6 +1535,39 @@
       <div class="q-pivot">
         <strong>42 yr</strong>
         <span style="font-size:9px;letter-spacing:0.04em">project stall</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 5b (NEW): Tech debt context -->
+  <section class="slide slide-rich" data-note="4:00 — 왜 지금인가: 12년 누적 기술 부채를 구체화">
+    <h2>StyleKorean Admin — 12년 누적 기술 부채</h2>
+    <p class="slide-lead">"왜 지금 마이그레이션인가"의 답은 단순히 "PHP라서"가 아니다. <strong>운영 중인 시스템</strong>에서 누적된 구조적 부채가 신규 기능 출시를 가로막는 임계점을 넘었다.</p>
+    <dl class="debt-grid">
+      <div class="debt-stat"><dt>1,099<span>pages</span></dt><dd>관리자 화면 — 단일 PHP 폴더에 평면 배치, 모듈 경계 없음</dd></div>
+      <div class="debt-stat"><dt>16<span>modules</span></dt><dd>주문·회원·정산·CS·콘텐츠 등 — 같은 테이블을 6+ page에서 직접 SQL</dd></div>
+      <div class="debt-stat"><dt>~830<span>SQL/raw</span></dt><dd>인라인 SQL · placeholder 없는 string concat · 동일 쿼리 다수 중복</dd></div>
+      <div class="debt-stat"><dt>0<span>tests</span></dt><dd>자동화 테스트 없음 — 회귀는 운영 사고로만 검출</dd></div>
+    </dl>
+    <div class="comparison" style="margin-top:8px">
+      <div class="cmp-col bad">
+        <h3>현재 (PHP Gnuboard5)</h3>
+        <ul>
+          <li>모듈 경계 없음 — 한 page 수정이 전사 영향</li>
+          <li>비즈니스 규칙이 view 안에 흩어짐</li>
+          <li>변경 lead time 평균 <strong>2주</strong> (QA 포함)</li>
+          <li>신규 기능 추가 시 회귀 리스크가 구현 비용을 초과</li>
+        </ul>
+      </div>
+      <div class="cmp-vs">→</div>
+      <div class="cmp-col good">
+        <h3>목표 (Next.js FSD + Spring DDD)</h3>
+        <ul>
+          <li>FSD slice = page 단위 모듈 경계 명시</li>
+          <li>Application Service 계층에 비즈니스 규칙 격리</li>
+          <li>변경 lead time <strong>1–2일</strong> (테스트 + 점진 배포)</li>
+          <li>모듈별 cutover — 점진적 위험 분산</li>
+        </ul>
       </div>
     </div>
   </section>
@@ -1803,24 +1836,24 @@
   </section>
 
   <!-- SLIDE 13: AWS AI-DLC definition quote -->
-  <section class="slide slide-statement" data-note="10:30 — AWS AI-DLC 정의">
+  <section class="slide slide-statement" data-note="10:30 — AWS AI-DLC 정의: AI가 중심, 사람은 판단점에만">
     <h2>AWS AI-DLC (2025)</h2>
     <blockquote class="statement">
-      AI를 중심 실행 주체로 두되, 판단이 필요한 지점에서만 인간에게 위임
-      <footer class="statement-attr">— AWS DevOps Blog, AI-Driven Development Life Cycle</footer>
+      AI를 중심 실행 주체로 두되,<br>판단이 필요한 지점에서만 인간에게 위임
+      <footer class="statement-attr">— AWS DevOps Blog, AI-Driven Development Life Cycle (2025)</footer>
     </blockquote>
-    <div class="split-grid" style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0 40px;margin-top:32px;max-width:640px">
+    <div class="split-grid" style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0 48px;margin-top:36px;max-width:720px">
       <div>
         <h3>AI Powered Execution</h3>
-        <p style="font-size:16px">계획 · 실행 · artifact 생성을 AI가 주도</p>
+        <p style="font-size:15px">계획 · 실행 · artifact 생성을 AI가 주도. 사람은 코드 작성이 아닌 <strong>방향 설정과 예외 처리</strong>를 한다.</p>
       </div>
       <div style="background:var(--rule-strong)"></div>
       <div>
         <h3>Human Oversight</h3>
-        <p style="font-size:16px">Review Queue · Tier 3 escalation · Mob Elaboration</p>
+        <p style="font-size:15px">미리 정해진 checkpoint에만 진입. Review Queue · Tier 3 escalation · Mob Elaboration (그룹 의사결정).</p>
       </div>
     </div>
-    <p class="statement-sub">Sprint → <strong>Bolt</strong> · Epic → <strong>Unit of Work (= 1 page)</strong></p>
+    <p class="statement-sub">결과: Sprint(주) → <strong>Bolt</strong>(시간) · Epic(분기) → <strong>Unit of Work = 1 page</strong></p>
   </section>
 
   <!-- SLIDE 14: AI-DLC 3-phase mapping -->
@@ -1845,6 +1878,24 @@
       <li><strong>CONSTRUCTION — HOW</strong>Step 4–8: React · Java · Test · Integration · Equivalence · Human: Step 4/5 review</li>
       <li><strong>OPERATIONS — RUN</strong>Step 9: Pattern Library · Git · Cost observability · → ECS/Aurora (향후)</li>
     </ul>
+  </section>
+
+  <!-- SLIDE 14b (NEW): AI-DLC vocabulary shift -->
+  <section class="slide slide-rich" data-note="12:00 — AI-DLC가 바꾼 어휘: Sprint→Bolt, Epic→Unit, Human→Checkpoint">
+    <h2>AI-DLC가 바꾼 어휘</h2>
+    <p class="slide-lead">AWS의 핵심 통찰은 단순하다. AI가 실행 주체가 되면 <strong>시간 단위가 짧아지고</strong> <strong>인간의 위치가 바뀐다</strong>. 단어를 그대로 두면 우리는 여전히 SDLC로 일하게 된다.</p>
+    <table style="font-size:14px">
+      <thead><tr><th>기존 SDLC 어휘</th><th>AI-DLC 어휘</th><th>본질 변화</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Sprint</strong> (1–4주)</td><td><strong>Bolt</strong> (hours–days)</td><td>스토리 단위가 1 page로 축소. 회의 없이 자동 실행.</td></tr>
+        <tr><td><strong>Epic</strong> (수개월)</td><td><strong>Unit of Work</strong> (1 page)</td><td>의미 있는 결과물의 최소 단위 = 1 page bolt.</td></tr>
+        <tr><td><strong>Sprint planning</strong></td><td><strong>Inception artifacts</strong></td><td>회의가 아닌 aispec · OpenAPI 생성.</td></tr>
+        <tr><td><strong>Developer</strong>가 코드 작성</td><td><strong>AI</strong>가 코드 작성, <strong>Developer</strong>는 review</td><td>판단의 위치가 작성→검증으로 이동.</td></tr>
+        <tr><td><strong>Code review</strong> (모든 PR)</td><td><strong>Checkpoint</strong> (Tier 3만)</td><td>5~10% 케이스에만 사람이 개입.</td></tr>
+        <tr><td><strong>QA cycle</strong> (sprint 끝)</td><td><strong>Verification gates</strong> (step별)</td><td>검증이 별도 phase가 아니라 매 step inline.</td></tr>
+      </tbody>
+    </table>
+    <p class="table-note" style="margin-top:16px"><strong>핵심:</strong> "Sprint 단위로 일정 잡자"라는 말이 회의에서 나오는 순간, AI-DLC가 아니라 SDLC + Copilot이다.</p>
   </section>
 
   <!-- SLIDE 15: AI-DLC 6 principles -->
@@ -1949,6 +2000,44 @@
         </svg>
       </div>
     </div>
+  </section>
+
+  <!-- SLIDE 18b (NEW): Harness before/after on one page -->
+  <section class="slide slide-rich" data-note="16:00 — Harness 적용 전후: 같은 page를 두 방식으로 처리한 결과">
+    <h2>Harness 전/후 — 같은 page, 다른 결과</h2>
+    <p class="slide-lead">"Harness가 정말 효과 있나"의 답은 동일한 page를 두 방식으로 처리해보면 명확하다. 다음은 <code>order.list</code> 1 page를 두 setup에서 처리한 측정 결과(내부 PoC).</p>
+
+    <div class="comparison" style="margin-top:8px">
+      <div class="cmp-col bad">
+        <h3>Without harness — LLM only</h3>
+        <ul>
+          <li>입력: PHP 파일 + "Spring Boot로 변환" 프롬프트</li>
+          <li>출력: 컴파일 안 됨 (3/5 시도)</li>
+          <li>비즈니스 규칙 누락: 6개 중 <strong>2개 유실</strong> (할인 적용·반품 가능 기간)</li>
+          <li>SQL: index 힌트 누락, N+1 발생</li>
+          <li>1회 검증 후 <strong>사람이 다시 작성</strong> — 6시간</li>
+        </ul>
+      </div>
+      <div class="cmp-vs">→</div>
+      <div class="cmp-col good">
+        <h3>With harness — Silicon2 Orchestrator</h3>
+        <ul>
+          <li>입력: aispec(검증 0.94) + MCP gap report + Layer 1 patterns</li>
+          <li>출력: 컴파일 1회 통과 · Tier 1 자동 수정 2회</li>
+          <li>비즈니스 규칙: <strong>6/6 모두 반영</strong> (spec에 명시되어 있음)</li>
+          <li>SQL: MCP가 원본 graph 비교, 동일성 확인</li>
+          <li>사람 개입: 1번 review (15분)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="bar-chart" style="margin-top:24px;max-width:560px">
+      <div class="bar-row"><span>없음</span><div class="bar-track"><div class="bar-fill" style="width:33%"></div></div><span class="bar-val">2/6 rules</span></div>
+      <div class="bar-row"><span>Harness</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--olive)"></div></div><span class="bar-val">6/6 rules</span></div>
+      <div class="bar-row"><span>사람 시간 (없음)</span><div class="bar-track"><div class="bar-fill" style="width:96%"></div></div><span class="bar-val">360 min</span></div>
+      <div class="bar-row"><span>사람 시간 (Harness)</span><div class="bar-track"><div class="bar-fill" style="width:8%;background:var(--olive)"></div></div><span class="bar-val">15 min</span></div>
+    </div>
+    <p class="table-note" style="margin-top:12px">결과의 차이는 모델 능력이 아니다 — <strong>입력의 구조화와 출력의 검증</strong> 때문이다.</p>
   </section>
 
   <!-- SLIDE 19: Spec + Harness dual structure -->
@@ -2057,37 +2146,41 @@
   </section>
 
   <!-- SLIDE 25: Hub-and-Spoke architecture -->
-  <section class="slide slide-rich" data-note="21:30 — Architecture overview">
+  <section class="slide slide-rich" data-note="21:30 — Architecture overview: 모든 통신은 hub를 경유한다">
     <h2>Hub-and-Spoke Orchestration</h2>
+    <p class="slide-lead"><strong>Worker는 서로를 모른다.</strong> Orchestrator만이 artifact를 중재한다 — Andrew Ng (Multi-Agent 2024): "에이전트 간 자유 상호작용은 품질 예측이 불가능하다."</p>
     <div class="slide-duo">
       <div>
-      <p style="font-size:16px"><strong>Worker는 서로를 모른다.</strong> Orchestrator만 artifact를 중재 — Andrew Ng: 자유 상호작용은 품질 예측 불가</p>
-      <p style="font-size:14px;color:var(--ink-muted);margin-top:8px">FastAPI Pipeline Engine · Artifact Store · BackgroundTask · Git worktree</p>
+        <h3>왜 Hub-and-Spoke인가</h3>
+        <ul style="font-size:14px">
+          <li><strong>관찰 가능성</strong> — 모든 입출력이 한 곳을 지나므로 trace·cost·retry를 일관 관리</li>
+          <li><strong>교체 가능성</strong> — Worker는 plug-and-play. Bedrock → Vertex 교체에 24h</li>
+          <li><strong>결정론적 부분 분리</strong> — MCP는 LLM 아닌 정적 분석, 같은 인터페이스로 결합</li>
+          <li><strong>병렬 안전성</strong> — 동일 page React/Java는 서로 모른 채 worktree에서 동시 실행</li>
+        </ul>
+        <p style="margin-top:12px;font-size:13px;color:var(--ink-faint)">FastAPI · BackgroundTask · SQLAlchemy artifact store · git worktree per page · Claude CLI subprocess</p>
       </div>
-      <div class="illus-panel">
-        <div class="illus-caption">Hub-and-Spoke</div>
-        <svg viewBox="0 0 400 220" role="img" aria-label="Hub and Spoke architecture">
-          <rect x="100" y="20" width="200" height="56" fill="rgba(194,78,58,0.12)" stroke="#c24e3a" stroke-width="1.5"/>
-          <text x="200" y="42" text-anchor="middle" font-size="12" font-weight="600">ORCHESTRATOR</text>
-          <text x="200" y="58" text-anchor="middle" font-size="9">Artifact Store · Step registry</text>
-          <text x="200" y="72" text-anchor="middle" font-size="8" fill="#8a8a85">spec → openapi → react → java</text>
-          <line x1="200" y1="76" x2="80" y2="130" stroke="#3a3a36"/>
-          <line x1="200" y1="76" x2="160" y2="130" stroke="#3a3a36"/>
-          <line x1="200" y1="76" x2="240" y2="130" stroke="#3a3a36"/>
-          <line x1="200" y1="76" x2="320" y2="130" stroke="#3a3a36"/>
-          <rect x="20" y="130" width="120" height="44" fill="#fff" stroke="#5a6b47"/><text x="80" y="152" text-anchor="middle" font-size="10">Analysis</text><text x="80" y="166" text-anchor="middle" font-size="8">Bedrock 2–3</text>
-          <rect x="100" y="130" width="120" height="44" fill="#fff" stroke="#5a6b47"/><text x="160" y="152" text-anchor="middle" font-size="10">React</text><text x="160" y="166" text-anchor="middle" font-size="8">Claude CLI · 4</text>
-          <rect x="180" y="130" width="120" height="44" fill="#fff" stroke="#5a6b47"/><text x="240" y="152" text-anchor="middle" font-size="10">Java</text><text x="240" y="166" text-anchor="middle" font-size="8">Claude CLI · 5–6</text>
-          <rect x="260" y="130" width="120" height="44" fill="rgba(90,107,71,0.12)" stroke="#5a6b47"/><text x="320" y="152" text-anchor="middle" font-size="10">MCP</text><text x="320" y="166" text-anchor="middle" font-size="8">php-analyzer</text>
-          <text x="200" y="205" text-anchor="middle" font-size="9" fill="#8a8a85">no worker-to-worker calls</text>
-        </svg>
+      <div class="hubspoke">
+        <div class="hub">
+          <strong>ORCHESTRATOR</strong>
+          Pipeline Engine · Step Registry · Artifact Store
+          <small>spec → openapi → react → java → tests → git</small>
+        </div>
+        <div class="spokes">
+          <div class="spoke"><strong>Analysis</strong>Bedrock<br>Step 2,3,7–9</div>
+          <div class="spoke"><strong>React</strong>Claude CLI<br>Step 4</div>
+          <div class="spoke"><strong>Java</strong>Claude CLI<br>Step 5–6</div>
+          <div class="spoke deterministic"><strong>MCP</strong>php-analyzer<br>All steps</div>
+        </div>
+        <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:6px;font-family:var(--mono)">no worker-to-worker calls · everything through hub</p>
       </div>
     </div>
   </section>
 
   <!-- SLIDE 26: 9-step pipeline -->
-  <section class="slide slide-steps" data-note="22:30 — 9 step pipeline">
+  <section class="slide slide-steps" data-note="22:30 — 9 step pipeline overview: 한 page = 9 step bolt">
     <h2>9-Step Pipeline (Page당)</h2>
+    <p class="slide-lead" style="margin-bottom:20px">한 page를 처리하는 사이클은 9 step의 <strong>고정된 시퀀스</strong>. 각 step은 schema-validated artifact를 출력하고, 다음 step의 입력으로 forward. 실패는 같은 step 안에서 3-Tier로 처리.</p>
     <div class="steps-bar">
       <div class="step done"><span class="step-num">1</span>Spec Load</div>
       <div class="step done"><span class="step-num">2</span>Verify</div>
@@ -2100,71 +2193,178 @@
       <div class="step"><span class="step-num">9</span>Complete</div>
     </div>
     <div class="steps-detail">
-      <div><strong>Phase A (1–2)</strong>Spec + MCP · 최대 5 page 병렬</div>
-      <div><strong>Phase B (3)</strong>OpenAPI · 5 page 병렬</div>
-      <div><strong>Phase C (4–5)</strong>React/Java · worktree 격리 · 2 page</div>
+      <div><strong>Phase A · Inception (1–2)</strong>aispec 로딩 + MCP gap 검증 · 결정론적 · 최대 <strong>5 page 병렬</strong></div>
+      <div><strong>Phase B · Contract (3)</strong>OpenAPI 생성 · Bedrock Sonnet · 5 page 병렬 (cache 적중률 높음)</div>
+      <div><strong>Phase C · Construction (4–5)</strong>React/Java 코드 생성 · Claude CLI · worktree 격리 · <strong>2 page 병렬</strong> (CPU/git bottleneck)</div>
+      <div><strong>Phase D · Verification (6–8)</strong>Java test + integration + 동등성 · 5 page 병렬 (대기 위주)</div>
+      <div><strong>Phase E · Ops (9)</strong>Pattern Library 등록 + git step commit + cost log</div>
+    </div>
+    <p class="table-note" style="margin-top:16px">Step 1–3은 사전 batch 가능, Step 4–8은 page별 직렬. <strong>전체 처리 시간 = max(parallel) + serial</strong>이라 Phase C가 bottleneck.</p>
+  </section>
+
+  <!-- SLIDE 26b (NEW): Step detail 1–5 -->
+  <section class="slide slide-rich" data-note="23:00 — 9-step 상세 (1~5): 각 step의 입력·출력·검증 게이트">
+    <h2>9-Step Detail · Inception + Construction (1–5)</h2>
+    <p class="slide-lead">9-step pipeline 중 <strong>Step 1–5</strong>는 spec 로딩에서 React/Java 코드 생성까지. 각 step의 출력은 다음 step의 입력 schema이며, 모든 step에 verification gate가 inline으로 존재.</p>
+    <div class="step-detail-grid" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 1</div>
+        <div class="sd-name">Spec Load</div>
+        <p class="sd-detail">aispec.json 로딩 · JSON schema validation · review_score ≥ 0.85 게이트.</p>
+        <p class="sd-gate">→ JSON schema · review threshold</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 2</div>
+        <div class="sd-name">MCP Gap Verify</div>
+        <p class="sd-detail">php-analyzer로 spec 누락 점검: 함수 호출 그래프 · SQL · 미수집 권한 체크.</p>
+        <p class="sd-gate">→ critical gaps = 0</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 3</div>
+        <div class="sd-name">OpenAPI Contract</div>
+        <p class="sd-detail">Bedrock Sonnet이 aispec → openapi.yaml 생성. FE/BE 공통 계약. Few-shot은 Layer 1 cached.</p>
+        <p class="sd-gate">→ openapi 3.x validator · breaking-change diff</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 4</div>
+        <div class="sd-name">React (FSD)</div>
+        <p class="sd-detail">Claude CLI가 worktree/react에서 page slice 생성. Feature-Sliced-Design 컨벤션 강제.</p>
+        <p class="sd-gate">→ ESLint · TypeScript strict · visual diff</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 5</div>
+        <div class="sd-name">Java (DDD)</div>
+        <p class="sd-detail">Claude CLI가 worktree/java에서 Application Service · Aggregate · Repository 생성. Hexagonal port/adapter.</p>
+        <p class="sd-gate">→ gradle compileJava · JUnit 컴파일</p>
+      </div>
+      <div class="step-detail-card" style="border-left-color:var(--olive);background:rgba(90,107,71,0.05)">
+        <div class="sd-num" style="color:var(--olive)">HUMAN CHECKPOINT</div>
+        <div class="sd-name">Review Queue (선택)</div>
+        <p class="sd-detail">Step 4/5 출력이 visual diff 임계 초과 시 자동 진입. approve / refine prompt / skip page 옵션.</p>
+        <p class="sd-gate" style="color:var(--accent)">→ 평균 5–10% page만 진입</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 26c (NEW): Step detail 6–9 -->
+  <section class="slide slide-rich" data-note="23:30 — 9-step 상세 (6~9): 동등성 검증과 학습">
+    <h2>9-Step Detail · Verification + Operations (6–9)</h2>
+    <p class="slide-lead">Step <strong>6–9</strong>가 SDLC 교과서에 없는 영역이다. "정말 동일한가"의 자동 증명과, 다음 page를 더 잘 처리하기 위한 학습 단계.</p>
+    <div class="step-detail-grid" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 6</div>
+        <div class="sd-name">Java Test</div>
+        <p class="sd-detail">aispec의 test_scenarios → JUnit 생성 · 실행. 실패 시 Tier 1 자동 재시도, 3회 시 Tier 2.</p>
+        <p class="sd-gate">→ JUnit 100% pass · coverage ≥ 70%</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 7</div>
+        <div class="sd-name">Integration</div>
+        <p class="sd-detail">FE/BE를 OpenAPI 계약으로 contract-test. Pact 또는 schemathesis. 누락 endpoint 자동 검출.</p>
+        <p class="sd-gate">→ contract validator pass</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 8</div>
+        <div class="sd-name">Functional Equivalence</div>
+        <p class="sd-detail">MCP가 PHP vs Java call graph · 발생 SQL · 응답 schema 비교. Greenfield에 없는 핵심 단계.</p>
+        <p class="sd-gate">→ graph diff · SQL set 동일 · response schema match</p>
+      </div>
+      <div class="step-detail-card">
+        <div class="sd-num">STEP 9</div>
+        <div class="sd-name">Complete · Learn</div>
+        <p class="sd-detail">git step commit 체인 · Pattern Library에 신규 패턴 등록 (예: sql_fetch → Repository) · cost·token log 기록.</p>
+        <p class="sd-gate">→ artifact chain persisted · pattern added</p>
+      </div>
+      <div class="step-detail-card" style="border-left-color:var(--olive);background:rgba(90,107,71,0.05)">
+        <div class="sd-num" style="color:var(--olive)">FAILURE LOOP</div>
+        <div class="sd-name">3-Tier Self-Correction</div>
+        <p class="sd-detail">Step 2–8 어느 게이트도 실패하면 Tier 1 → Tier 2 → Tier 3로 자동 escalate.</p>
+        <p class="sd-gate" style="color:var(--accent)">→ T1 ~80% · T2 ~15% · T3 5–10%</p>
+      </div>
+      <div class="step-detail-card" style="border-left-color:var(--olive);background:rgba(90,107,71,0.05)">
+        <div class="sd-num" style="color:var(--olive)">OUTPUT</div>
+        <div class="sd-name">Page bolt 완료</div>
+        <p class="sd-detail">branch <code>migration/&lt;page&gt;</code> · 모든 artifact가 1:1 매핑되어 commit log로 추적 가능.</p>
+        <p class="sd-gate" style="color:var(--accent)">→ Dashboard에 ✓ 표시 · cost/duration 누적</p>
+      </div>
     </div>
   </section>
 
   <!-- SLIDE 27: Artifact chain flow -->
-  <section class="slide slide-rich" data-note="23:30 — Artifact chain">
+  <section class="slide slide-rich" data-note="23:30 — Artifact chain: 각 단계 출력이 다음 단계 입력의 schema-validated 형태">
     <h2>구조화된 Artifact Chain</h2>
-    <div class="slide-duo">
-      <div>
-        <p style="font-size:16px;margin-bottom:12px">MetaGPT: 자연어 체이닝 대비 executability <strong>2.25 → 3.75</strong></p>
-        <div class="flow-inline">
-          <span>aispec.json</span><span class="arrow">→</span>
-          <span>gap report</span><span class="arrow">→</span>
-          <span class="emphasis">openapi.yaml</span><span class="arrow">→</span>
-          <span>*.tsx</span><span class="arrow">+</span>
-          <span>*.java</span><span class="arrow">→</span>
-          <span>test report</span><span class="arrow">→</span>
-          <span>git commit</span>
-        </div>
-        <p style="margin-top:16px;font-size:14px;color:var(--ink-faint)">schema-validated · NL 설명 아님 · hallucination 전파 차단</p>
+    <p class="slide-lead">Worker 간 통신은 자연어가 아니라 <strong>스키마 검증된 artifact</strong>. MetaGPT(arXiv 2023)에 따르면 자연어 체이닝 대비 executability가 <strong>2.25 → 3.75</strong>로 향상된다.</p>
+
+    <div class="lineage-flow" style="margin:20px 0">
+      <div class="lf-node olive"><strong>aispec.json</strong>707 spec<br><span style="color:var(--ink-faint)">JSON schema</span></div>
+      <div class="lf-arrow">→</div>
+      <div class="lf-node"><strong>gap report</strong>MCP verify<br><span style="color:var(--ink-faint)">critical=0</span></div>
+      <div class="lf-arrow">→</div>
+      <div class="lf-node accent"><strong>openapi.yaml</strong>API contract<br><span style="color:var(--ink-faint)">3.x validator</span></div>
+      <div class="lf-arrow">→</div>
+      <div class="lf-node"><strong>*.tsx</strong>FSD slice<br><span style="color:var(--ink-faint)">ESLint pass</span></div>
+      <div class="lf-arrow">+</div>
+      <div class="lf-node"><strong>*.java</strong>DDD layer<br><span style="color:var(--ink-faint)">compile ✓</span></div>
+      <div class="lf-arrow">→</div>
+      <div class="lf-node"><strong>test report</strong>JUnit+contract<br><span style="color:var(--ink-faint)">equivalence</span></div>
+      <div class="lf-arrow">→</div>
+      <div class="lf-node olive"><strong>git commit</strong>artifact chain<br><span style="color:var(--ink-faint)">step-by-step</span></div>
+    </div>
+
+    <div class="comparison" style="margin-top:8px">
+      <div class="cmp-col bad">
+        <h3>NL chaining (vibes)</h3>
+        <ul>
+          <li>"이 spec으로 React 컴포넌트를 만들어줘"</li>
+          <li>다음 단계가 출력을 다시 <em>파싱</em></li>
+          <li>오타·누락·재해석 → cascading hallucination</li>
+          <li>executability <strong>2.25 / 5</strong></li>
+        </ul>
       </div>
-      <div class="illus-panel">
-        <div class="illus-caption">Type chain (machine-readable)</div>
-        <svg viewBox="0 0 260 180" role="img">
-          <rect x="90" y="4" width="80" height="22" fill="rgba(194,78,58,0.15)" stroke="#c24e3a"/><text x="130" y="18" text-anchor="middle" font-size="8">JSON schema</text>
-          <line x1="130" y1="26" x2="130" y2="40" stroke="#c24e3a"/>
-          <rect x="70" y="40" width="120" height="22" fill="#fff" stroke="#3a3a36"/><text x="130" y="54" text-anchor="middle" font-size="8">OpenAPI 3.x</text>
-          <line x1="90" y1="62" x2="70" y2="76"/><line x1="170" y1="62" x2="190" y2="76" stroke="#c24e3a"/>
-          <rect x="20" y="76" width="70" height="22" fill="#fff" stroke="#3a3a36"/><text x="55" y="90" text-anchor="middle" font-size="8">TSX + FSD</text>
-          <rect x="170" y="76" width="70" height="22" fill="#fff" stroke="#3a3a36"/><text x="205" y="90" text-anchor="middle" font-size="8">Java DDD</text>
-          <line x1="130" y1="98" x2="130" y2="112" stroke="#c24e3a"/>
-          <rect x="60" y="112" width="140" height="22" fill="rgba(90,107,71,0.12)" stroke="#5a6b47"/><text x="130" y="126" text-anchor="middle" font-size="8">JUnit + contract + equiv report</text>
-          <line x1="130" y1="134" x2="130" y2="148" stroke="#c24e3a"/>
-          <rect x="80" y="148" width="100" height="22" fill="rgba(28,28,26,0.06)" stroke="#3a3a36"/><text x="130" y="162" text-anchor="middle" font-size="8">git artifact chain</text>
-        </svg>
+      <div class="cmp-vs">→</div>
+      <div class="cmp-col good">
+        <h3>Schema artifact chain</h3>
+        <ul>
+          <li>각 단계 출력 = 다음 단계가 기대하는 <em>타입</em></li>
+          <li>schema 검증 실패 시 즉시 retry (T1)</li>
+          <li>전파 hallucination 차단 · 재현 가능</li>
+          <li>executability <strong>3.75 / 5</strong></li>
+        </ul>
       </div>
     </div>
   </section>
 
   <!-- SLIDE 28: 4 Workers table -->
-  <section class="slide slide-rich" data-note="24:30 — Workers detail">
+  <section class="slide slide-rich" data-note="24:30 — Workers detail: single-focus + 모델 차등 + 결정론적 MCP">
     <h2>4종 Worker</h2>
-    <div class="slide-duo">
-      <table style="font-size:13px">
-        <thead><tr><th>Worker</th><th>구현</th><th>담당</th><th>모델</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Analysis</strong></td><td>Bedrock API</td><td>Step 2–3, 7–9</td><td>Haiku/Sonnet</td></tr>
-          <tr><td><strong>React</strong></td><td>Claude CLI</td><td>Step 4</td><td>Sonnet→Opus</td></tr>
-          <tr><td><strong>Java</strong></td><td>Claude CLI</td><td>Step 5–6</td><td>Sonnet→Opus</td></tr>
-          <tr><td><strong>MCP</strong></td><td>php-analyzer</td><td>All steps</td><td>결정론적</td></tr>
-        </tbody>
-      </table>
-      <div class="illus-panel">
-        <div class="illus-caption">Parallel worktrees (same page)</div>
-        <svg viewBox="0 0 260 140" role="img">
-          <rect x="90" y="8" width="80" height="28" fill="rgba(194,78,58,0.1)" stroke="#c24e3a"/><text x="130" y="26" text-anchor="middle" font-size="9">Orchestrator</text>
-          <line x1="110" y1="36" x2="60" y2="60"/><line x1="150" y1="36" x2="200" y2="60" stroke="#c24e3a"/>
-          <rect x="10" y="60" width="100" height="36" fill="#fff" stroke="#5a6b47"/><text x="60" y="78" text-anchor="middle" font-size="9">worktree/react</text><text x="60" y="90" text-anchor="middle" font-size="8">Step 4</text>
-          <rect x="150" y="60" width="100" height="36" fill="#fff" stroke="#5a6b47"/><text x="200" y="78" text-anchor="middle" font-size="9">worktree/java</text><text x="200" y="90" text-anchor="middle" font-size="8">Step 5–6</text>
-          <text x="130" y="125" text-anchor="middle" font-size="8" fill="#8a8a85">isolated branches · merge at Step 7+</text>
-        </svg>
-        <p class="table-note" style="margin-top:8px">React/Java <strong>동일 page 병렬</strong> 가능</p>
+    <p class="slide-lead">Andrew Ng 가이드: <strong>"하나의 worker = 하나의 책임"</strong>. 모델·도구를 분리하여 한 page에서 실패가 다른 page로 전파되지 않도록 한다.</p>
+    <table style="font-size:13px;margin-bottom:20px">
+      <thead><tr><th>Worker</th><th>구현</th><th>담당 Step</th><th>모델</th><th>특성</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Analysis</strong></td><td>AWS Bedrock API</td><td>Step 2 · 3 · 7 · 8 · 9</td><td>Haiku → Sonnet</td><td>구조 분석·spec 변환·결과 종합</td></tr>
+        <tr><td><strong>React</strong></td><td>Claude CLI + worktree</td><td>Step 4</td><td>Sonnet → Opus (T2)</td><td>FSD slice 생성 · ESLint · visual diff</td></tr>
+        <tr><td><strong>Java</strong></td><td>Claude CLI + worktree</td><td>Step 5–6</td><td>Sonnet → Opus (T2)</td><td>DDD 레이어 · Hexagonal · JUnit</td></tr>
+        <tr><td><strong>MCP</strong></td><td>php-analyzer stdio</td><td>All steps 보조</td><td>— (결정론적)</td><td>12 tools · gap·graph·SQL·diff</td></tr>
+      </tbody>
+    </table>
+    <div class="hubspoke" style="max-width:100%">
+      <div class="hub">
+        <strong>Orchestrator — Page Coordinator</strong>
+        같은 page id에 대해 React/Java worker를 동시 실행, 결과를 Step 7에서 통합
       </div>
+      <div class="spokes" style="grid-template-columns:1fr 1fr">
+        <div class="spoke">
+          <strong>worktree/react/{page_id}</strong>
+          Claude CLI · Step 4 · isolated branch <code>react/&lt;page&gt;</code><br>
+          <span style="color:var(--ink-faint)">ESLint · type-check · visual diff</span>
+        </div>
+        <div class="spoke">
+          <strong>worktree/java/{page_id}</strong>
+          Claude CLI · Step 5–6 · isolated branch <code>java/&lt;page&gt;</code><br>
+          <span style="color:var(--ink-faint)">gradle compileJava · JUnit · contract</span>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:6px;font-family:var(--mono)">→ Step 7 integration → merge to <code>migration/&lt;page&gt;</code></p>
     </div>
   </section>
 
@@ -2192,54 +2392,50 @@
   </section>
 
   <!-- SLIDE 30: Tech stack grid -->
-  <section class="slide slide-rich" data-note="26:30 — Tech stack">
-    <h2>기술 스택</h2>
-    <div class="slide-duo">
-      <div class="two-list">
-        <ul>
-          <li><strong>Orchestrator</strong>Python + FastAPI · SQLAlchemy · WS + REST</li>
-          <li><strong>Output</strong>Next.js FSD · Spring Boot 3.4 DDD · Turborepo</li>
-        </ul>
-        <ul>
-          <li><strong>AI</strong>Bedrock · Claude CLI · php-analyzer MCP · Playwright</li>
-          <li><strong>Ops</strong>Git worktree · auto commit · cost tracking · Dashboard</li>
-        </ul>
-      </div>
-      <div class="illus-panel">
-        <div class="illus-caption">Layered deployment (target)</div>
-        <svg viewBox="0 0 260 200" role="img">
-          <rect x="20" y="8" width="220" height="28" fill="rgba(28,28,26,0.06)" stroke="#3a3a36"/><text x="130" y="26" text-anchor="middle" font-size="9">Dashboard (human oversight)</text>
-          <rect x="40" y="44" width="180" height="32" fill="rgba(194,78,58,0.1)" stroke="#c24e3a"/><text x="130" y="64" text-anchor="middle" font-size="10">Orchestrator (FastAPI)</text>
-          <rect x="60" y="84" width="140" height="28" fill="#fff" stroke="#5a6b47"/><text x="130" y="102" text-anchor="middle" font-size="9">Workers + MCP</text>
-          <rect x="30" y="120" width="90" height="28" fill="#fff" stroke="#d4cfc4"/><text x="75" y="138" text-anchor="middle" font-size="8">Next.js</text>
-          <rect x="140" y="120" width="90" height="28" fill="#fff" stroke="#d4cfc4"/><text x="185" y="138" text-anchor="middle" font-size="8">Spring Boot</text>
-          <rect x="50" y="156" width="160" height="28" fill="rgba(90,107,71,0.1)" stroke="#5a6b47"/><text x="130" y="174" text-anchor="middle" font-size="8">AWS · ECS · Aurora (roadmap)</text>
-        </svg>
-      </div>
-    </div>
+  <section class="slide slide-rich" data-note="26:30 — Tech stack: 각 레이어의 선택 근거">
+    <h2>기술 스택 — 각 레이어의 선택 근거</h2>
+    <p class="slide-lead">"왜 이 스택"의 답은 <strong>교체 가능성과 검증 가능성</strong>이다. 단일 vendor lock-in을 피하고, 각 레이어에 표준 verification tool이 있는 것을 골랐다.</p>
+    <table style="font-size:13px;margin-top:8px">
+      <thead><tr><th>레이어</th><th>선택</th><th>근거</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Orchestrator</strong></td><td>Python 3.12 + FastAPI · SQLAlchemy · BackgroundTask</td><td>MCP·LLM 생태계 최대 · async 자연스러움 · pytest 성숙</td></tr>
+        <tr><td><strong>Frontend output</strong></td><td>Next.js 14 + FSD · shadcn/ui · TanStack Query</td><td>FSD = page 단위 마이그레이션 자연 매핑 · 검증 가능한 컨벤션</td></tr>
+        <tr><td><strong>Backend output</strong></td><td>Spring Boot 3.4 + DDD/Hexagonal · Flyway</td><td>port/adapter = 레거시 → 신규 점진 교체 패턴</td></tr>
+        <tr><td><strong>AI layer</strong></td><td>AWS Bedrock (Claude 4.5) · Claude CLI · subprocess</td><td>Prompt Caching 90% 절감 · CLI = 코드 작성 도구로 검증됨</td></tr>
+        <tr><td><strong>Static analysis</strong></td><td>php-analyzer MCP (12 tools)</td><td>결정론적 — LLM 사용 안 함 · graph·SQL 비교 가능</td></tr>
+        <tr><td><strong>Verification</strong></td><td>ESLint · TypeScript · gradle · Playwright · Pact</td><td>업계 표준 → 채용·교체 비용 최소</td></tr>
+        <tr><td><strong>Ops</strong></td><td>Git worktree · turborepo · cost log · Dashboard WS</td><td>git만으로 추적 · CI 별도 없이 verifiable</td></tr>
+      </tbody>
+    </table>
+    <p class="table-note" style="margin-top:14px"><strong>교체 가능성 검증:</strong> Bedrock → Vertex 24h · Claude CLI → Aider 1주 · FastAPI → NestJS는 비추 (MCP/Python 라이브러리 손실).</p>
   </section>
 
   <!-- SLIDE 31: PoC bbs.alert_close -->
-  <section class="slide slide-split" data-note="27:30 — PoC">
+  <section class="slide slide-split" data-note="27:30 — PoC: 최소 리스크 page로 end-to-end 검증">
     <h2>PoC: bbs.alert_close</h2>
+    <p class="slide-lead" style="margin-bottom:24px">"전체 파이프라인이 실제로 돌아가는가"를 가장 낮은 리스크로 검증하기 위한 PoC. 707 spec 중 <strong>복잡도 LOW + review 0.95</strong>인 page를 선정.</p>
     <div class="split-grid">
       <div class="split-col">
         <h3>선정 근거</h3>
         <ul>
-          <li>1 operation, 6 business rules</li>
-          <li>10 test scenarios</li>
-          <li>Review score <strong>0.950</strong></li>
-          <li>Complexity: LOW</li>
+          <li>1 operation (단일 endpoint)</li>
+          <li>6 business rules (모두 spec에 명시)</li>
+          <li>10 test scenarios (oracle 풍부)</li>
+          <li>Review score <strong>0.950</strong> · top 3%</li>
+          <li>Complexity: <strong>LOW</strong> (단일 form · 단일 table)</li>
+          <li>외부 의존성 없음 (notification 제외)</li>
         </ul>
       </div>
       <div class="split-rule" aria-hidden="true"></div>
       <div class="split-col">
         <h3>현재 구현 상태</h3>
         <ul>
-          <li class="mark-yes">Step 1–5 + Engine E2E</li>
-          <li class="mark-yes">54 tests passing</li>
-          <li>Step 6–9 · Dashboard · WS</li>
-          <li>Harness gates (lint/compile)</li>
+          <li class="mark-yes">Step 1–5 + Pipeline Engine E2E 통과</li>
+          <li class="mark-yes">단위 테스트 <strong>54개</strong> 모두 통과</li>
+          <li class="mark-yes">FastAPI <code>POST /api/pipeline/run</code> 동작</li>
+          <li>Step 6–9 (test · integration · equivalence · ops)</li>
+          <li>Dashboard (Next.js) · WebSocket push</li>
+          <li>Harness gates: ESLint · gradle compileJava 통합</li>
         </ul>
       </div>
     </div>
@@ -2262,25 +2458,30 @@
   </section>
 
   <!-- SLIDE 32: Dashboard UI -->
-  <section class="slide slide-rich" data-note="28:30 — Dashboard">
+  <section class="slide slide-rich" data-note="28:30 — Dashboard: 인간 oversight 표면. 4가지 화면">
     <h2>Dashboard — Human Oversight UI</h2>
+    <p class="slide-lead">Dashboard는 단순한 모니터링이 아니라 <strong>Human Oversight의 표면</strong>. AI-DLC가 말하는 <em>Mob Elaboration</em>·<em>Mob Construction</em>을 UI로 구현한 형태.</p>
     <div class="slide-duo">
-      <ul class="plain-list">
-        <li><strong>Pipeline View</strong>707 page status · step timeline · batch run</li>
-        <li><strong>Review Queue</strong>Tier 3 · approve/refine/skip</li>
-        <li><strong>Observability</strong>Cost · tokens · auto-fix · patterns</li>
-        <p style="margin-top:16px;font-size:15px">AI-DLC <strong>Mob Elaboration</strong> → UI · WebSocket 실시간</p>
-      </ul>
+      <div>
+        <ul class="plain-list">
+          <li><strong>Pipeline View</strong>707 page status grid · 각 page의 현재 step · 최근 실패 · 누적 cost</li>
+          <li><strong>Review Queue</strong>Tier 3 escalation 목록 · diff viewer · approve / refine prompt / skip · 평균 처리 15분</li>
+          <li><strong>Observability</strong>비용 · 토큰 · auto-fix rate trend · Pattern Library 통계 · 모델별 사용량</li>
+          <li><strong>Batch Runner</strong>module 단위로 batch 실행 · 병렬도 설정 · 일정 예약</li>
+        </ul>
+        <p style="margin-top:14px;font-size:13px;color:var(--ink-faint)">WebSocket 실시간 상태 push · React Server Components · 운영 중 24/7 가시성</p>
+      </div>
       <div class="wireframe" aria-label="Dashboard wireframe">
-        <div class="wf-header"><span>Silicon2 Migration</span><span>707 pages · $12.40 today</span></div>
+        <div class="wf-header"><span>Silicon2 — Migration Dashboard</span><span>707 pages · $12.40 today · 4 in-flight</span></div>
         <div class="wf-body">
           <div class="wf-sidebar">
-            <div class="wf-item active"></div><div class="wf-item"></div><div class="wf-item"></div><div class="wf-item"></div>
+            <div class="wf-item active"></div><div class="wf-item"></div><div class="wf-item"></div><div class="wf-item"></div><div class="wf-item"></div>
           </div>
           <div class="wf-main">
             <div class="wf-row"><div class="wf-cell highlight"></div><div class="wf-cell"></div><div class="wf-cell"></div></div>
             <div class="wf-row"><div class="wf-cell"></div><div class="wf-cell"></div><div class="wf-cell"></div></div>
             <div class="wf-row"><div class="wf-cell"></div><div class="wf-cell highlight"></div><div class="wf-cell"></div></div>
+            <div class="wf-row"><div class="wf-cell"></div><div class="wf-cell"></div><div class="wf-cell"></div></div>
           </div>
         </div>
       </div>
@@ -2288,27 +2489,30 @@
   </section>
 
   <!-- SLIDE 33: Demo flow steps -->
-  <section class="slide slide-rich" data-note="29:30 — Demo flow">
-    <h2>실행 흐름 (Demo)</h2>
+  <section class="slide slide-rich" data-note="29:30 — Demo flow: 실제 실행 시 일어나는 일">
+    <h2>실행 흐름 — Demo Sequence</h2>
+    <p class="slide-lead">발표 중 보여줄 실제 실행 시나리오. 7–12분 안에 1 page가 React + Java 양 코드베이스로 변환되고 git에 커밋된다.</p>
     <div class="slide-duo">
-      <ol class="numbered-list" style="font-size:15px">
-        <li>Dashboard → <code>bbs.alert_close</code> → Run Pipeline</li>
-        <li>Step 1–3: aispec · MCP gap · openapi.yaml</li>
-        <li>Step 4–5: Claude CLI → React + Java (worktree)</li>
-        <li>Harness: ESLint · compileJava</li>
-        <li>Git branch <code>migration/bbs.alert_close</code></li>
-        <li>Dashboard: cost · duration · artifacts</li>
+      <ol class="numbered-list" style="font-size:14px">
+        <li><strong>Dashboard 진입</strong> — <code>bbs.alert_close</code> 카드 클릭 · "Run Pipeline" 버튼</li>
+        <li><strong>Step 1–2 (~30s)</strong> — aispec 로드 · php-analyzer MCP gap 0 확인</li>
+        <li><strong>Step 3 (~90s)</strong> — Bedrock Sonnet이 OpenAPI 생성 · 3.x validator pass</li>
+        <li><strong>Step 4–5 병렬 (~5m)</strong> — worktree 2개 분기, Claude CLI가 React/Java 동시 작성</li>
+        <li><strong>Harness gates (~30s)</strong> — ESLint · TypeScript · gradle compileJava 자동 실행</li>
+        <li><strong>Git step commits</strong> — branch <code>migration/bbs.alert_close</code> · step별 커밋 체인</li>
+        <li><strong>Dashboard refresh</strong> — WebSocket로 cost($0.42) · duration(7m22s) · artifacts 표시</li>
       </ol>
-      <div class="illus-panel">
-        <div class="illus-caption">Demo timeline (~8–15 min target)</div>
-        <svg viewBox="0 0 260 200" role="img">
-          <line x1="30" y1="20" x2="30" y2="180" stroke="#d4cfc4"/>
-          <circle cx="30" cy="40" r="6" fill="#5a6b47"/><text x="50" y="44" font-size="9">Run clicked</text>
-          <circle cx="30" cy="70" r="6" fill="#5a6b47"/><text x="50" y="74" font-size="9">Steps 1–3 (~2m)</text>
-          <circle cx="30" cy="110" r="6" fill="#c24e3a"/><text x="50" y="114" font-size="9">Steps 4–5 parallel (~5m)</text>
-          <circle cx="30" cy="150" r="6" fill="#5a6b47"/><text x="50" y="154" font-size="9">Gates pass → git commit</text>
-          <circle cx="30" cy="180" r="6" fill="#5a6b47"/><text x="50" y="184" font-size="9">Dashboard refresh (WS)</text>
-        </svg>
+      <div class="illus-panel" style="padding:20px 24px">
+        <div class="illus-caption">Demo timeline (실측 7–12분)</div>
+        <div style="display:grid;grid-template-columns:80px 1fr;gap:6px 14px;font-size:13px;color:var(--ink-muted);margin-top:8px">
+          <span style="font-family:var(--mono);color:var(--olive)">00:00</span><span>Run clicked → Pipeline Engine 큐 진입</span>
+          <span style="font-family:var(--mono);color:var(--olive)">00:30</span><span>Step 1–2 완료 (spec + gap)</span>
+          <span style="font-family:var(--mono);color:var(--olive)">02:00</span><span>Step 3 OpenAPI 생성 완료</span>
+          <span style="font-family:var(--mono);color:var(--accent)">07:00</span><span>Step 4–5 (React/Java 병렬) 완료</span>
+          <span style="font-family:var(--mono);color:var(--olive)">07:30</span><span>Harness gates pass → step commits</span>
+          <span style="font-family:var(--mono);color:var(--olive)">07:32</span><span>Dashboard에 ✓ · diff viewer 활성</span>
+        </div>
+        <p style="margin-top:14px;font-size:11px;color:var(--ink-faint);font-family:var(--mono)">실측은 모델 응답 시간 · 코드 크기에 따라 변동. 평균 LOW complexity 8m / MEDIUM 14m / HIGH 30m+.</p>
       </div>
     </div>
   </section>
@@ -2363,6 +2567,48 @@
         </svg>
       </div>
     </div>
+  </section>
+
+  <!-- SLIDE 36b (NEW): Scenario projections -->
+  <section class="slide slide-rich" data-note="32:00 — 시나리오: 707 page 완료 시점·비용을 세 시나리오로 honest하게 제시">
+    <h2>시나리오 — 707 page 완주 비용·일정</h2>
+    <p class="slide-lead">"42년 → 6–12개월"은 평균값이다. 실제 산출은 <strong>auto-fix rate</strong>와 <strong>인간 review 비율</strong>에 따라 갈린다. 세 시나리오를 솔직하게 보여준다.</p>
+    <div class="scenarios" style="margin-top:8px">
+      <div class="sc-card optimistic">
+        <h4>Optimistic</h4>
+        <p class="sc-headline"><strong>4 mo</strong> · $350</p>
+        <p style="font-size:12px;color:var(--ink-muted)">auto-fix 88%, human review 5%, 병렬 5 page · 단일 module batch에서 패턴 일치율 높음</p>
+        <ul>
+          <li>완전 자동 page: 600 / 707</li>
+          <li>Review Queue: 60 page · 평균 15분</li>
+          <li>인력: 2명 (Review + DevOps)</li>
+          <li>한 module당 평균 3주</li>
+        </ul>
+      </div>
+      <div class="sc-card realistic">
+        <h4>Realistic (Beta 가정)</h4>
+        <p class="sc-headline"><strong>8 mo</strong> · <strong>$1,500</strong></p>
+        <p style="font-size:12px;color:var(--ink-muted)">auto-fix 75%, human review 15%, 병렬 3 page · complexity 분포 평균</p>
+        <ul>
+          <li>완전 자동 page: 460 / 707</li>
+          <li>Review Queue: 180 page · 평균 25분</li>
+          <li>인력: 3명 (Review 2 + DevOps 1)</li>
+          <li>통합 phase (모듈 cutover): 추가 2개월</li>
+        </ul>
+      </div>
+      <div class="sc-card">
+        <h4>Conservative</h4>
+        <p class="sc-headline">12 mo · $2,100</p>
+        <p style="font-size:12px;color:var(--ink-muted)">auto-fix 60%, human review 30%, 병렬 2 page · 복잡 page 비중 높음</p>
+        <ul>
+          <li>완전 자동 page: 350 / 707</li>
+          <li>Review Queue: 280 page · 평균 35분</li>
+          <li>수동 보완: 77 page (특수 케이스)</li>
+          <li>인력: 4명 + cutover phase 별도</li>
+        </ul>
+      </div>
+    </div>
+    <p class="table-note" style="margin-top:20px"><strong>비교:</strong> 동일 707 page를 수동으로 한다면 5명 팀 × 2주/page = <strong>54 개월</strong> 인건비 약 <strong>$1.5M+</strong>. Conservative 시나리오조차 <strong>1/700 비용</strong>이다.</p>
   </section>
 
   <!-- SLIDE 37: Quality effects -->
@@ -2438,22 +2684,41 @@
   </section>
 
   <!-- SLIDE 41: Summary -->
-  <section class="slide slide-split" data-note="36:30 — Summary three pillars">
-    <h2>이론 → 적용 → 효과</h2>
-    <div class="split-grid" style="grid-template-columns:1fr 1fr 1fr;gap:32px">
-      <div class="split-col">
-        <h3>이론</h3>
-        <p style="font-size:15px">SDLC migration 재정의<br>AWS AI-DLC 3-phase<br>Harness 4-component<br>→ 수렴하는 설계 원칙</p>
+  <section class="slide slide-rich" data-note="36:30 — Summary three pillars: 마지막으로 3축 정리 + 핵심 take-away">
+    <h2>이론 → 적용 → 효과 — 종합</h2>
+    <div class="scenarios" style="margin-top:8px">
+      <div class="sc-card">
+        <h4>이론</h4>
+        <p class="sc-headline">수렴하는 <strong>4원칙</strong></p>
+        <ul>
+          <li>SDLC: Migration은 equivalence 문제</li>
+          <li>AI-DLC: AI 실행 + human checkpoint</li>
+          <li>Harness: 모델 외부 시스템이 결정적</li>
+          <li>공통: intent · verify · checkpoint · trace</li>
+        </ul>
       </div>
-      <div class="split-col">
-        <h3>적용</h3>
-        <p style="font-size:15px">9-step pipeline<br>4 Workers · Hub-Spoke<br>707 spec · MCP harness<br>→ 운영 가능한 bolt</p>
+      <div class="sc-card realistic">
+        <h4>적용</h4>
+        <p class="sc-headline">운영 가능한 <strong>bolt</strong></p>
+        <ul>
+          <li>9-Step Pipeline · 5 Phase</li>
+          <li>4 Workers · Hub-and-Spoke</li>
+          <li>707 aispec + MCP harness</li>
+          <li>3-Tier feedback · Review Queue</li>
+        </ul>
       </div>
-      <div class="split-col">
-        <h3>효과</h3>
-        <p style="font-size:15px">42yr → 6–12mo<br>$350–2K vs person-years<br>60–75% auto · artifact trace<br>→ migration factory</p>
+      <div class="sc-card optimistic">
+        <h4>효과</h4>
+        <p class="sc-headline"><strong>Migration factory</strong></p>
+        <ul>
+          <li>42 person-years → 6–12 개월</li>
+          <li>$350–2,100 vs 인건비 $1.5M+</li>
+          <li>60–75% 자동 · 25–40% review</li>
+          <li>모든 변환에 artifact chain</li>
+        </ul>
       </div>
     </div>
+    <p class="table-note" style="margin-top:24px;font-family:var(--serif);font-size:16px;color:var(--ink);text-align:center"><strong>한 줄 정리.</strong> 707 spec + Harness + Bolt 단위 SDLC = <em>대규모 레거시 마이그레이션을 산업화한다.</em></p>
   </section>
 
   <!-- SLIDE 42: Closing -->

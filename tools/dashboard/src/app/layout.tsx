@@ -1,3 +1,6 @@
+import "./globals.css";
+import { Sidebar } from "@/components/Sidebar";
+
 export const metadata = { title: "Silicon2 Migration Orchestrator" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -9,8 +12,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
       </head>
-      <body style={{ margin: 0, background: "#09090b", color: "#fafafa", fontFamily: "'Pretendard Variable', sans-serif" }}>
-        {children}
+      <body>
+        <div className="app-layout">
+          <Sidebar />
+          <main className="main">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );

@@ -324,7 +324,7 @@ Java Worker도 동일. **React와 Java는 같은 page에서 병렬 실행 가능
 
 ```python
 REACT_WORKER_CONFIG = {
-    "command": ["claude", "--headless", "--model", "sonnet",
+    "command": ["claude", "--print", "--output-format", "json", "--model", "sonnet",
                 "--allowedTools", "Edit,Write,Bash,Read"],
     "cwd": ".worktrees/react-{page_id}/apps/frontend",
     "bash_allowed": ["npx", "eslint", "prettier", "jest", "next"],
@@ -333,7 +333,7 @@ REACT_WORKER_CONFIG = {
 }
 
 JAVA_WORKER_CONFIG = {
-    "command": ["claude", "--headless", "--model", "sonnet",
+    "command": ["claude", "--print", "--output-format", "json", "--model", "sonnet",
                 "--allowedTools", "Edit,Write,Bash,Read"],
     "cwd": ".worktrees/java-{page_id}/apps/backend",
     "bash_allowed": ["./gradlew", "gradle", "java"],
