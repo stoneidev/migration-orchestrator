@@ -7,9 +7,9 @@ import boto3
 
 
 MODEL_IDS = {
-    "haiku": "anthropic.claude-haiku-4-5-20251001-v1:0",
-    "sonnet": "anthropic.claude-sonnet-4-6-20250514-v1:0",
-    "opus": "anthropic.claude-opus-4-6-20250514-v1:0",
+    "haiku": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "sonnet": "us.anthropic.claude-sonnet-4-6",
+    "opus": "us.anthropic.claude-opus-4-6-v1",
 }
 
 MODEL_PRICING = {
@@ -40,7 +40,9 @@ class AnalysisWorker:
 
     def _get_client(self):
         if self._client is None:
-            self._client = boto3.client("bedrock-runtime", region_name=self.region)
+            from botocore.config import Config
+            config = Config(read_timeout=300, connect_timeout=10, retries={"max_attempts": 2})
+            self._client = boto3.client("bedrock-runtime", region_name=self.region, config=config)
         return self._client
 
     async def invoke(
@@ -76,17 +78,31 @@ class AnalysisWorker:
 
         response = self._call_bedrock(model_id, body)
 
-        output = response.get("output", {})
-        message = output.get("message", {})
-        content_blocks = message.get("content", [])
+        # Bedrock InvokeModel 응답 파싱 (두 가지 형식 지원)
         text = ""
-        for block in content_blocks:
-            if isinstance(block, dict) and block.get("text"):
-                text += block["text"]
+        input_tokens = 0
+        output_tokens = 0
 
-        usage = response.get("usage", {})
-        input_tokens = usage.get("inputTokens", 0)
-        output_tokens = usage.get("outputTokens", 0)
+        # 형식 1: InvokeModel (content at top level)
+        content_blocks = response.get("content", [])
+        if content_blocks:
+            for block in content_blocks:
+                if isinstance(block, dict) and block.get("text"):
+                    text += block["text"]
+            usage = response.get("usage", {})
+            input_tokens = usage.get("input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
+        else:
+            # 형식 2: Converse API (output.message.content)
+            output = response.get("output", {})
+            message = output.get("message", {})
+            content_blocks = message.get("content", [])
+            for block in content_blocks:
+                if isinstance(block, dict) and block.get("text"):
+                    text += block["text"]
+            usage = response.get("usage", {})
+            input_tokens = usage.get("inputTokens", usage.get("input_tokens", 0))
+            output_tokens = usage.get("outputTokens", usage.get("output_tokens", 0))
 
         pricing = MODEL_PRICING.get(model, MODEL_PRICING["sonnet"])
         cost = (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1000

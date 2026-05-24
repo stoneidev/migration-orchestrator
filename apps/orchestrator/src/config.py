@@ -24,4 +24,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/orchestrator.db"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=[".env", "../../.env"],
+        env_file_encoding="utf-8",
+    )
