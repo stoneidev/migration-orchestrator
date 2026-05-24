@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker, Session
 
 from src.db.models import Page, StepExecution, Artifact, CostLog
 from src.pipeline.state_machine import StepState, PageState, transition_page
+from src.api.ws.events import event_bus
 
 
 @dataclass
@@ -63,8 +64,10 @@ class PipelineEngine:
             session.flush()
 
             context = StepContext(page_id=page.id)
+            event_bus.emit("pipeline:started", {"page_id": page_id})
 
             for step in self.steps:
+                event_bus.emit("pipeline:step_started", {"page_id": page_id, "step": step.step_number, "step_name": step.name})
                 result = await self._execute_step(step, page, context, session)
                 if not result.success:
                     transition_page(PageState.RUNNING, PageState.BLOCKED)
@@ -133,9 +136,18 @@ class PipelineEngine:
             if result.success:
                 page.current_step = step.step_number
                 self._save_artifacts(page.id, step, result, session)
+                event_bus.emit("pipeline:step_completed", {
+                    "page_id": page.id, "step": step.step_number,
+                    "step_name": step.name, "status": "passed",
+                    "duration_ms": result.duration_ms, "cost": result.cost,
+                })
                 return result
 
             if attempt == self.max_retries:
+                event_bus.emit("pipeline:step_failed", {
+                    "page_id": page.id, "step": step.step_number,
+                    "step_name": step.name, "error": result.error,
+                })
                 return result
 
         return StepResult(success=False, error="Max retries exceeded")
