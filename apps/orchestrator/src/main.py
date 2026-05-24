@@ -24,6 +24,17 @@ app.include_router(project_router, prefix="/api")
 app.include_router(spec_gen_router, prefix="/api")
 
 
+@app.on_event("startup")
+async def startup():
+    from src.db.deps import configure_db
+    from src.config import Settings
+    try:
+        settings = Settings()
+        configure_db(settings.database_url)
+    except Exception:
+        configure_db("sqlite:///./data/orchestrator.db")
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}

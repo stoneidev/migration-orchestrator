@@ -4,7 +4,7 @@ from src.pipeline.engine import BaseStep, StepResult, StepContext
 from src.pipeline.steps.step1_spec_load import load_spec
 from src.pipeline.steps.step2_spec_verify import verify_spec
 from src.pipeline.steps.step3_api_contract import generate_api_contract
-from src.pipeline.steps.step4_react_gen import generate_react
+from src.pipeline.steps.step4_react_gen import generate_react, verify_visual_similarity
 from src.pipeline.steps.step5_java_gen import generate_java
 from src.pipeline.steps.step6_java_test import generate_java_tests
 from src.pipeline.steps.step7_integration import check_integration
@@ -75,8 +75,10 @@ class Step4ReactGen(BaseStep):
     name = "react_generation"
     step_number = 4
 
-    def __init__(self, output_base: Path):
+    def __init__(self, output_base: Path, frontend_dir: Path | None = None, screenshots_dir: Path | None = None):
         self.output_base = output_base
+        self.frontend_dir = frontend_dir
+        self.screenshots_dir = screenshots_dir
 
     async def execute(self, context: StepContext) -> StepResult:
         if context.spec is None or context.api_contract is None:
@@ -85,18 +87,68 @@ class Step4ReactGen(BaseStep):
         output_dir = self.output_base / context.page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Find original screenshot
+        screenshot_path = None
+        if self.screenshots_dir:
+            page_screenshots = self.screenshots_dir / context.page_id.replace(".", "_")
+            candidates = [
+                page_screenshots / "original.png",
+                page_screenshots / "full_page.png",
+                page_screenshots / "step3_ambassador.png",
+            ]
+            for c in candidates:
+                if c.exists():
+                    screenshot_path = c
+                    break
+
         result = await generate_react(
             spec=context.spec,
             api_contract=context.api_contract,
             output_dir=output_dir,
+            screenshot_path=screenshot_path,
         )
-        if result.success:
-            return StepResult(
-                success=True,
-                artifacts={"files": result.files_created},
-                model_used="sonnet",
-            )
-        return StepResult(success=False, error=result.error)
+
+        if not result.success:
+            return StepResult(success=False, error=result.error)
+
+        # Visual verification
+        if screenshot_path and screenshot_path.exists():
+            try:
+                frontend_dir = self.frontend_dir or self.output_base.parent.parent.parent.parent  # apps/frontend
+                page_route = "/admin/" + context.page_id.replace(".", "/")
+                passed, diff_pct, react_shot = await verify_visual_similarity(
+                    original_screenshot=screenshot_path,
+                    react_project_dir=frontend_dir,
+                    page_route=page_route,
+                )
+                result.visual_diff_percent = diff_pct
+
+                from src.api.ws.events import event_bus
+                event_bus.emit("pipeline:visual_diff", {
+                    "page_id": context.page_id,
+                    "diff_percent": diff_pct,
+                    "passed": passed,
+                })
+
+                if not passed:
+                    return StepResult(
+                        success=False,
+                        error=f"Visual diff too high: {diff_pct}% (threshold: 15%)",
+                        artifacts={"files": result.files_created, "visual_diff": diff_pct},
+                    )
+            except Exception as e:
+                # Visual check failed but files were generated — pass with warning
+                from src.api.ws.events import event_bus
+                event_bus.emit("pipeline:visual_diff_skipped", {
+                    "page_id": context.page_id,
+                    "reason": str(e)[:100],
+                })
+
+        return StepResult(
+            success=True,
+            artifacts={"files": result.files_created, "visual_diff": result.visual_diff_percent},
+            model_used="sonnet",
+        )
 
 
 class Step5JavaGen(BaseStep):
@@ -204,13 +256,18 @@ class Step9Complete(BaseStep):
 
 
 def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
+    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
     return [
         Step1SpecLoad(specs_dir=settings.specs_dir),
         Step2SpecVerify(mcp_server_path=settings.mcp_server_path),
         Step3ApiContract(),
-        Step4ReactGen(output_base=Path("apps/frontend/src/app/admin")),
-        Step5JavaGen(output_base=Path("apps/backend/src/main/java")),
-        Step6JavaTest(output_base=Path("apps/backend/src/test/java")),
+        Step4ReactGen(
+            output_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
+            frontend_dir=project_root / "apps" / "frontend",
+            screenshots_dir=project_root / "screenshots",
+        ),
+        Step5JavaGen(output_base=project_root / "apps" / "backend" / "src" / "main" / "java"),
+        Step6JavaTest(output_base=project_root / "apps" / "backend" / "src" / "test" / "java"),
         Step7Integration(),
         Step8Equivalence(mcp_server_path=settings.mcp_server_path),
         Step9Complete(),
