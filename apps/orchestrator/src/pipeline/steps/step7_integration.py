@@ -97,7 +97,7 @@ async def integrate_frontend_backend(
     result: CLIResult = await worker.invoke(
         prompt=prompt,
         model="sonnet",
-        max_turns=30,  # More turns — integration is complex
+        max_turns=15,
         cwd=project_root,
         allowed_tools=["Write", "Edit", "Bash", "Read"],
     )

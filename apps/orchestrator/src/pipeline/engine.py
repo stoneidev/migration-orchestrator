@@ -126,31 +126,15 @@ class PipelineEngine:
         from src.pipeline.steps.step1_spec_load import load_spec
         from src.config import Settings
 
-        settings = Settings()
-
-        # Reload spec
         try:
+            settings = Settings()
             spec = load_spec(page.id, specs_dir=settings.specs_dir)
             context.spec = spec
         except Exception:
             pass
 
-        # Rebuild api_contract from step executions or generate placeholder
-        # If Step 3 passed, we have the contract — try to find it
-        artifact = session.query(Artifact).filter_by(page_id=page.id, artifact_type="api_contract").first()
-        if artifact:
-            from pathlib import Path
-            contract_path = Path(artifact.file_path)
-            if contract_path.exists():
-                context.api_contract = contract_path.read_text()
-            else:
-                # File doesn't exist but step passed — generate minimal contract from spec
-                if context.spec:
-                    ops = context.spec.get("operations", [])
-                    routes = "\n".join(f"  /{op.get('id','')}:\n    get:\n      summary: {op.get('name','')}" for op in ops)
-                    context.api_contract = f"openapi: '3.1.0'\ninfo:\n  title: {page.id}\npaths:\n{routes}"
-        elif context.spec:
-            # No artifact yet but spec exists — minimal contract
+        # Minimal API contract from spec (no file I/O to avoid stuck)
+        if context.spec:
             ops = context.spec.get("operations", [])
             routes = "\n".join(f"  /api/v1/{op.get('id','')}:\n    get:\n      summary: {op.get('name','')}" for op in ops)
             context.api_contract = f"openapi: '3.1.0'\ninfo:\n  title: {page.id}\npaths:\n{routes}"
