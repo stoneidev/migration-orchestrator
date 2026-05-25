@@ -1,8 +1,9 @@
 import asyncio
 import json
 import re
-from datetime import datetime
 from pathlib import Path
+
+from src.util.clock import utcnow
 
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
@@ -81,7 +82,7 @@ def _extract_from_url(url: str) -> tuple[str, str]:
 
 @router.post("/spec-gen/start")
 async def start_spec_gen(request: SpecGenRequest):
-    session_id = f"sg-{datetime.utcnow().strftime('%H%M%S')}"
+    session_id = f"sg-{utcnow().strftime('%H%M%S')}"
     session = _get_session(session_id)
     session["url"] = request.url
 

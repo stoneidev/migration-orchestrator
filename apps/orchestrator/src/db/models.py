@@ -3,6 +3,8 @@ from datetime import datetime
 from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from src.util.clock import utcnow_naive
+
 
 class Base(DeclarativeBase):
     pass
@@ -25,8 +27,8 @@ class Page(Base):
     total_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     step_executions: Mapped[list["StepExecution"]] = relationship(back_populates="page")
     artifacts: Mapped[list["Artifact"]] = relationship(back_populates="page")
@@ -67,7 +69,7 @@ class Artifact(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     content_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     page: Mapped["Page"] = relationship(back_populates="artifacts")
 
@@ -82,7 +84,7 @@ class Review(Base):
     review_type: Mapped[str | None] = mapped_column(String, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     page: Mapped["Page"] = relationship(back_populates="reviews")
@@ -103,7 +105,7 @@ class SpecGenHistory(Base):
     cost: Mapped[float] = mapped_column(Float, default=0.0)
     spec_path: Mapped[str | None] = mapped_column(String, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
 
 class CostLog(Base):
@@ -117,6 +119,6 @@ class CostLog(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cost: Mapped[float] = mapped_column(Float, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
     page: Mapped["Page | None"] = relationship(back_populates="cost_logs")

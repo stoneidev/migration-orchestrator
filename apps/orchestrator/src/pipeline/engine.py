@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import sessionmaker, Session
@@ -13,6 +12,7 @@ from src.pipeline.state_machine import (
     transition_page,
 )
 from src.api.ws.events import event_bus
+from src.util.clock import utcnow_naive
 
 
 def _set_page_state(page: Page, target: PageState) -> None:
@@ -84,7 +84,7 @@ class PipelineEngine:
                 return
 
             _set_page_state(page, PageState.RUNNING)
-            page.started_at = datetime.utcnow()
+            page.started_at = utcnow_naive()
             session.flush()
 
             context = StepContext(page_id=page.id)
@@ -102,7 +102,7 @@ class PipelineEngine:
                 self._update_context_from_result(context, step, result)
 
             _set_page_state(page, PageState.COMPLETE)
-            page.completed_at = datetime.utcnow()
+            page.completed_at = utcnow_naive()
             session.commit()
 
     async def run_next_step(self, page_id: str) -> None:
@@ -113,14 +113,14 @@ class PipelineEngine:
 
             if PageState(page.migration_status) != PageState.RUNNING:
                 _set_page_state(page, PageState.RUNNING)
-                page.started_at = page.started_at or datetime.utcnow()
+                page.started_at = page.started_at or utcnow_naive()
                 session.flush()
 
             next_step_num = page.current_step + 1
             step = next((s for s in self.steps if s.step_number == next_step_num), None)
             if step is None:
                 _set_page_state(page, PageState.COMPLETE)
-                page.completed_at = datetime.utcnow()
+                page.completed_at = utcnow_naive()
                 session.commit()
                 return
 
@@ -134,7 +134,7 @@ class PipelineEngine:
                 final_step_number = self.steps[-1].step_number if self.steps else next_step_num
                 if next_step_num == final_step_number:
                     _set_page_state(page, PageState.COMPLETE)
-                    page.completed_at = datetime.utcnow()
+                    page.completed_at = utcnow_naive()
                 session.commit()
                 event_bus.emit("pipeline:step_completed", {
                     "page_id": page_id, "step": step.step_number,
@@ -168,9 +168,9 @@ class PipelineEngine:
         self, step: BaseStep, page: Page, context: StepContext, session: Session
     ) -> StepResult:
         for attempt in range(1, self.max_retries + 1):
-            started = datetime.utcnow()
+            started = utcnow_naive()
             result = await step.execute(context)
-            ended = datetime.utcnow()
+            ended = utcnow_naive()
             duration_ms = int((ended - started).total_seconds() * 1000)
             result.duration_ms = duration_ms
 

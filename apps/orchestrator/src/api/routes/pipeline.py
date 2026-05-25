@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, BackgroundTasks
 from pydantic import BaseModel, field_validator
@@ -11,6 +10,7 @@ from src.db.models import Page, StepExecution, Artifact
 from src.pipeline.engine import PipelineEngine
 from src.pipeline.steps.registry import create_pipeline_steps
 from src.config import Settings
+from src.util.clock import utcnow
 
 router = APIRouter()
 
@@ -89,15 +89,15 @@ def run_pipeline(request: PipelineRunRequest, background_tasks: BackgroundTasks)
     run_id = str(uuid.uuid4())[:8]
     for page_id in request.page_ids:
         task_id = f"{run_id}-{page_id}"
-        _running_tasks[task_id] = {"page_id": page_id, "status": "queued", "started_at": datetime.utcnow().isoformat()}
+        _running_tasks[task_id] = {"page_id": page_id, "status": "queued", "started_at": utcnow().isoformat()}
         background_tasks.add_task(_run_pipeline_bg, page_id, task_id)
     return {"success": True, "data": {"run_id": run_id, "page_ids": request.page_ids}}
 
 
 @router.post("/pipeline/run-step", status_code=202)
 def run_single_step(request: StepRunRequest, background_tasks: BackgroundTasks):
-    task_id = f"step-{request.page_id}-{datetime.utcnow().strftime('%H%M%S')}"
-    _running_tasks[task_id] = {"page_id": request.page_id, "status": "queued", "started_at": datetime.utcnow().isoformat()}
+    task_id = f"step-{request.page_id}-{utcnow().strftime('%H%M%S')}"
+    _running_tasks[task_id] = {"page_id": request.page_id, "status": "queued", "started_at": utcnow().isoformat()}
     background_tasks.add_task(_run_single_step_bg, request.page_id, task_id)
     return {"success": True, "data": {"task_id": task_id, "page_id": request.page_id, "message": f"Running next step for {request.page_id}"}}
 
@@ -105,8 +105,8 @@ def run_single_step(request: StepRunRequest, background_tasks: BackgroundTasks):
 @router.post("/pipeline/retry-step", status_code=202)
 def retry_step(request: StepRetryRequest, background_tasks: BackgroundTasks):
     """Reset a specific step and re-run from that point."""
-    task_id = f"retry-{request.page_id}-step{request.step_number}-{datetime.utcnow().strftime('%H%M%S')}"
-    _running_tasks[task_id] = {"page_id": request.page_id, "step": request.step_number, "status": "queued", "started_at": datetime.utcnow().isoformat()}
+    task_id = f"retry-{request.page_id}-step{request.step_number}-{utcnow().strftime('%H%M%S')}"
+    _running_tasks[task_id] = {"page_id": request.page_id, "step": request.step_number, "status": "queued", "started_at": utcnow().isoformat()}
     background_tasks.add_task(_retry_step_bg, request.page_id, request.step_number, task_id)
     return {"success": True, "data": {"task_id": task_id, "page_id": request.page_id, "step": request.step_number, "message": f"Retrying step {request.step_number} for {request.page_id}"}}
 

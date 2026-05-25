@@ -1,3 +1,7 @@
+from contextlib import asynccontextmanager
+
+import asyncio
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,13 +11,32 @@ from src.api.routes.project import router as project_router
 from src.api.routes.spec_gen import router as spec_gen_router
 from src.api.routes.services import router as services_router
 from src.api.ws.events import event_bus
-from src.db.deps import get_db  # noqa: F401 — re-export for tests
+from src.db.deps import configure_db, get_db  # noqa: F401 — get_db re-exported for tests
 
-app = FastAPI(title="Silicon2 Migration Orchestrator", version="0.1.0")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    event_bus.set_loop(asyncio.get_running_loop())
+    try:
+        from src.config import Settings
+        settings = Settings()
+        configure_db(settings.database_url)
+    except Exception:
+        configure_db("sqlite:///./data/orchestrator.db")
+    try:
+        yield
+    finally:
+        await event_bus.shutdown()
+
+
+app = FastAPI(title="Silicon2 Migration Orchestrator", version="0.1.0", lifespan=lifespan)
+
+# Local single-user tool: explicit dev-only loopback origins. Allowing "*"
+# together with credentials is invalid per the CORS spec and was rejected by
+# browsers, so we whitelist the actual dev ports we run.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,20 +49,6 @@ app.include_router(spec_gen_router, prefix="/api")
 app.include_router(services_router, prefix="/api")
 
 
-@app.on_event("startup")
-async def startup():
-    import asyncio
-    from src.db.deps import configure_db
-    from src.config import Settings
-    from src.api.ws.events import event_bus
-    event_bus.set_loop(asyncio.get_event_loop())
-    try:
-        settings = Settings()
-        configure_db(settings.database_url)
-    except Exception:
-        configure_db("sqlite:///./data/orchestrator.db")
-
-
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
@@ -48,9 +57,9 @@ async def health():
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    event_bus.register(ws)
+    await event_bus.register(ws)
     try:
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
-        event_bus.unregister(ws)
+        await event_bus.unregister(ws)

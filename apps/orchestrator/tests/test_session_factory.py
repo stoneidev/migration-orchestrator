@@ -24,9 +24,10 @@ def test_get_session_factory_returns_set_factory(temp_factory):
     assert deps.get_session_factory() is temp_factory
 
 
-def test_get_session_factory_configures_default_when_unset():
-    # Ensure no factory is set first.
+def test_get_session_factory_configures_default_when_unset(tmp_path, monkeypatch):
+    """Auto-configure on first use must not touch the developer's real DB."""
     deps.reset_session_factory()
+    monkeypatch.chdir(tmp_path)
     factory = deps.get_session_factory()
     assert factory is not None
     deps.reset_session_factory()
