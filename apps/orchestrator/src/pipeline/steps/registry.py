@@ -89,10 +89,24 @@ class Step4ReactGen(BaseStep):
     name = "react_generation"
     step_number = 4
 
-    def __init__(self, output_base: Path, frontend_dir: Path | None = None, screenshots_dir: Path | None = None):
+    def __init__(
+        self,
+        output_base: Path,
+        frontend_dir: Path | None = None,
+        screenshots_dir: Path | None = None,
+        *,
+        dev_port: int = 3100,
+        dev_startup_timeout_s: int = 30,
+        ssim_threshold: float = 0.85,
+        diff_threshold_pct: float = 15.0,
+    ):
         self.output_base = output_base
         self.frontend_dir = frontend_dir
         self.screenshots_dir = screenshots_dir
+        self.dev_port = dev_port
+        self.dev_startup_timeout_s = dev_startup_timeout_s
+        self.ssim_threshold = ssim_threshold
+        self.diff_threshold_pct = diff_threshold_pct
 
     async def execute(self, context: StepContext) -> StepResult:
         if context.spec is None or context.api_contract is None:
@@ -137,29 +151,45 @@ class Step4ReactGen(BaseStep):
             )
 
         # Visual verification
+        visual_artifacts: dict[str, object] = {"files": result.files_created}
         if screenshot_path and screenshot_path.exists():
             try:
                 frontend_dir = self.frontend_dir or self.output_base.parent.parent.parent.parent  # apps/frontend
                 page_route = "/admin/" + context.page_id.replace(".", "/")
-                passed, diff_pct, react_shot = await verify_visual_similarity(
+                passed, comparison, react_shot = await verify_visual_similarity(
                     original_screenshot=screenshot_path,
                     react_project_dir=frontend_dir,
                     page_route=page_route,
+                    port=self.dev_port,
+                    startup_timeout_s=self.dev_startup_timeout_s,
+                    ssim_threshold=self.ssim_threshold,
+                    diff_threshold_pct=self.diff_threshold_pct,
                 )
-                result.visual_diff_percent = diff_pct
+                result.visual_diff_percent = comparison.diff_percent
+                visual_artifacts.update(
+                    {
+                        "visual_diff": comparison.diff_percent,
+                        "visual_ssim": comparison.ssim,
+                    }
+                )
 
                 from src.api.ws.events import event_bus
                 event_bus.emit("pipeline:visual_diff", {
                     "page_id": context.page_id,
-                    "diff_percent": diff_pct,
+                    "diff_percent": comparison.diff_percent,
+                    "ssim": comparison.ssim,
                     "passed": passed,
                 })
 
                 if not passed:
                     return StepResult(
                         success=False,
-                        error=f"Visual diff too high: {diff_pct}% (threshold: 15%)",
-                        artifacts={"files": result.files_created, "visual_diff": diff_pct},
+                        error=(
+                            f"Visual gate failed: ssim={comparison.ssim} "
+                            f"(threshold {self.ssim_threshold}), "
+                            f"diff={comparison.diff_percent}% (threshold {self.diff_threshold_pct}%)"
+                        ),
+                        artifacts=visual_artifacts,
                         model_used="sonnet",
                         cost=result.cost,
                         input_tokens=result.input_tokens,
@@ -175,10 +205,14 @@ class Step4ReactGen(BaseStep):
                     "page_id": context.page_id,
                     "reason": str(e)[:100],
                 })
+                visual_artifacts["visual_check_error"] = str(e)[:200]
+
+        else:
+            visual_artifacts["visual_diff"] = result.visual_diff_percent
 
         return StepResult(
             success=True,
-            artifacts={"files": result.files_created, "visual_diff": result.visual_diff_percent},
+            artifacts=visual_artifacts,
             model_used="sonnet",
             cost=result.cost,
             input_tokens=result.input_tokens,
@@ -370,6 +404,10 @@ def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
             output_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
             frontend_dir=project_root / "apps" / "frontend",
             screenshots_dir=project_root / "screenshots",
+            dev_port=settings.frontend_dev_port,
+            dev_startup_timeout_s=settings.frontend_dev_startup_timeout_s,
+            ssim_threshold=settings.visual_ssim_threshold,
+            diff_threshold_pct=settings.visual_diff_threshold_pct,
         ),
         Step5JavaGen(output_base=project_root / "apps" / "backend" / "src" / "main" / "java"),
         Step6JavaTest(output_base=project_root / "apps" / "backend"),

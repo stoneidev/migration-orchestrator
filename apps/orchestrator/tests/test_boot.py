@@ -26,5 +26,7 @@ def test_settings_defaults():
     )
     assert settings.max_parallel_pages == 5
     assert settings.max_parallel_generation == 2
-    assert settings.visual_diff_threshold == 5
+    assert settings.visual_ssim_threshold == 0.85
+    assert settings.visual_diff_threshold_pct == 15.0
+    assert settings.frontend_dev_port == 3100
     assert settings.screenshots_dir == Path("./screenshots")

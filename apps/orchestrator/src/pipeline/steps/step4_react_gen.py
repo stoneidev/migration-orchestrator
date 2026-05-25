@@ -140,21 +140,34 @@ async def generate_react(
     )
 
 
+@dataclass
+class VisualComparison:
+    """Result of comparing two screenshots."""
+
+    diff_percent: float
+    ssim: float
+    width: int
+    height: int
+
+
 async def verify_visual_similarity(
     original_screenshot: Path,
     react_project_dir: Path,
     page_route: str,
-    port: int = 3001,
-) -> tuple[bool, float, Path | None]:
-    """
-    1. Start Next.js dev server
-    2. Capture screenshot of generated React page
-    3. Compare with original
-    4. Return (pass, diff_percent, react_screenshot_path)
+    port: int = 3100,
+    startup_timeout_s: int = 30,
+    ssim_threshold: float = 0.85,
+    diff_threshold_pct: float = 15.0,
+) -> tuple[bool, VisualComparison, Path | None]:
+    """Start the generated Next.js app, screenshot the page, and compare.
+
+    Passes when the page is either visually similar (``ssim >= ssim_threshold``)
+    or pixel-close (``diff_percent <= diff_threshold_pct``). SSIM is the
+    primary gate because the pixel diff is over-sensitive to anti-aliasing
+    and minor font differences.
     """
     react_screenshot = original_screenshot.parent / "react_latest.png"
 
-    # Start dev server
     server_proc = subprocess.Popen(
         ["npx", "next", "dev", "--port", str(port)],
         cwd=str(react_project_dir),
@@ -163,11 +176,10 @@ async def verify_visual_similarity(
     )
 
     try:
-        # Wait for server to start
-        await asyncio.sleep(10)
+        await _wait_for_dev_server(port, startup_timeout_s)
 
-        # Capture React page screenshot
         from playwright.async_api import async_playwright
+
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page(viewport={"width": 430, "height": 932})
@@ -176,10 +188,9 @@ async def verify_visual_similarity(
             await page.screenshot(path=str(react_screenshot), full_page=True)
             await browser.close()
 
-        # Compare images
-        diff_percent = await _compare_screenshots(original_screenshot, react_screenshot)
-
-        return (diff_percent <= 15.0, diff_percent, react_screenshot)
+        comparison = compare_screenshots(original_screenshot, react_screenshot)
+        passed = comparison.ssim >= ssim_threshold or comparison.diff_percent <= diff_threshold_pct
+        return passed, comparison, react_screenshot
 
     finally:
         server_proc.kill()
@@ -189,30 +200,90 @@ async def verify_visual_similarity(
             pass
 
 
-async def _compare_screenshots(img1_path: Path, img2_path: Path) -> float:
-    """Simple pixel-based comparison. Returns difference percentage."""
+async def _wait_for_dev_server(port: int, timeout_s: int) -> None:
+    """Poll ``http://localhost:port/`` until it answers or the timeout elapses."""
+    import socket
+
+    deadline = asyncio.get_event_loop().time() + timeout_s
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return
+        except OSError:
+            await asyncio.sleep(0.5)
+    # Final fallback: legacy fixed sleep so callers still get a screenshot
+    # attempt instead of an early failure when startup is slow.
+    await asyncio.sleep(2)
+
+
+def compare_screenshots(img1_path: Path, img2_path: Path) -> VisualComparison:
+    """Compute a pixel diff *and* an SSIM score for two screenshots.
+
+    ``ssim`` is computed via a lightweight grayscale implementation (mean,
+    variance, covariance over the whole image) to avoid pulling in
+    scikit-image; this is sufficient for the layout-level check the
+    pipeline needs.
+    """
     try:
         from PIL import Image
         import numpy as np
+    except ImportError:
+        # Without PIL/numpy we can't compare; fall back to "identical" so
+        # the legacy behaviour (no enforcement) is preserved on barebones
+        # installs.
+        return VisualComparison(diff_percent=0.0, ssim=1.0, width=0, height=0)
 
+    try:
         img1 = Image.open(img1_path).convert("RGB")
         img2 = Image.open(img2_path).convert("RGB")
-
-        # Resize to same dimensions
-        target_size = (430, min(img1.height, img2.height, 2000))
-        img1 = img1.resize(target_size)
-        img2 = img2.resize(target_size)
-
-        arr1 = np.array(img1, dtype=float)
-        arr2 = np.array(img2, dtype=float)
-
-        diff = np.abs(arr1 - arr2)
-        diff_percent = (diff.sum() / (arr1.size * 255)) * 100
-
-        return round(diff_percent, 2)
-
-    except ImportError:
-        # If PIL/numpy not available, skip comparison
-        return 0.0
     except Exception:
-        return 50.0  # assume different if error
+        return VisualComparison(diff_percent=50.0, ssim=0.0, width=0, height=0)
+
+    target_size = (430, min(img1.height, img2.height, 2000))
+    img1 = img1.resize(target_size)
+    img2 = img2.resize(target_size)
+
+    arr1 = np.asarray(img1, dtype=np.float64)
+    arr2 = np.asarray(img2, dtype=np.float64)
+
+    diff = np.abs(arr1 - arr2)
+    diff_percent = round(float(diff.sum() / (arr1.size * 255)) * 100, 2)
+
+    gray1 = arr1.mean(axis=2)
+    gray2 = arr2.mean(axis=2)
+    ssim = _ssim_global(gray1, gray2)
+
+    return VisualComparison(
+        diff_percent=diff_percent,
+        ssim=round(ssim, 4),
+        width=target_size[0],
+        height=target_size[1],
+    )
+
+
+def _ssim_global(a, b) -> float:
+    """Single-window SSIM on grayscale arrays (range 0-255).
+
+    Implements the standard SSIM formula with the literature's stabilisation
+    constants. A single global window is sufficient for the orchestrator's
+    layout-level pass/fail decision and avoids depending on scikit-image
+    just for one number.
+    """
+    import numpy as np
+
+    L = 255.0
+    K1, K2 = 0.01, 0.03
+    C1 = (K1 * L) ** 2
+    C2 = (K2 * L) ** 2
+
+    mu_a = float(np.mean(a))
+    mu_b = float(np.mean(b))
+    var_a = float(np.var(a))
+    var_b = float(np.var(b))
+    cov_ab = float(np.mean((a - mu_a) * (b - mu_b)))
+
+    numerator = (2 * mu_a * mu_b + C1) * (2 * cov_ab + C2)
+    denominator = (mu_a**2 + mu_b**2 + C1) * (var_a + var_b + C2)
+    if denominator == 0:
+        return 1.0
+    return float(numerator / denominator)
