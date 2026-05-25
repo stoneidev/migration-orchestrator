@@ -1,9 +1,25 @@
+"""Wrapper around the local ``claude`` CLI binary.
+
+The wrapper enforces a real wall-clock timeout: a watchdog thread runs the
+process inside its own POSIX session and SIGTERM/SIGKILLs the entire group
+when the deadline is exceeded. Live stream-json events are forwarded to the
+WebSocket event bus as they arrive.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import json
+import os
+import signal
 import subprocess
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+
+DEFAULT_TIMEOUT_SECONDS = 600
 
 
 @dataclass
@@ -15,12 +31,22 @@ class CLIResult:
     duration_ms: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    timed_out: bool = False
+    raw_events: list[dict] = field(default_factory=list)
 
 
 class ClaudeCLIWorker:
-    def __init__(self, claude_path: str = "/opt/homebrew/bin/claude", mcp_config: str | None = None):
+    def __init__(
+        self,
+        claude_path: str = "/opt/homebrew/bin/claude",
+        mcp_config: str | None = None,
+        default_timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    ):
         self.claude_path = claude_path
         self.mcp_config = mcp_config
+        self.default_timeout = default_timeout
 
     async def invoke(
         self,
@@ -30,9 +56,17 @@ class ClaudeCLIWorker:
         cwd: str | Path | None = None,
         allowed_tools: list[str] | None = None,
         mcp_config: str | None = None,
+        timeout: int | None = None,
     ) -> CLIResult:
         return await asyncio.to_thread(
-            self._invoke_sync, prompt, model, max_turns, cwd, allowed_tools, mcp_config or self.mcp_config
+            self._invoke_sync,
+            prompt,
+            model,
+            max_turns,
+            cwd,
+            allowed_tools,
+            mcp_config or self.mcp_config,
+            timeout if timeout is not None else self.default_timeout,
         )
 
     def _invoke_sync(
@@ -42,7 +76,8 @@ class ClaudeCLIWorker:
         max_turns: int,
         cwd: str | Path | None,
         allowed_tools: list[str] | None,
-        mcp_config: str | None = None,
+        mcp_config: str | None,
+        timeout: int,
     ) -> CLIResult:
         cmd = [
             self.claude_path,
@@ -68,16 +103,41 @@ class ClaudeCLIWorker:
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(cwd) if cwd else None,
+                start_new_session=True,
             )
+        except FileNotFoundError:
+            return CLIResult(success=False, error=f"Claude CLI not found at {self.claude_path}")
 
-            # Send prompt and close stdin
+        # Watchdog: kill the entire process group when the wall-clock deadline
+        # passes. SIGTERM first, then SIGKILL 2s later if still alive.
+        deadline = start + timeout
+        timed_out_flag = {"value": False}
+
+        def _watchdog() -> None:
+            while time.time() < deadline:
+                if proc.poll() is not None:
+                    return
+                time.sleep(0.5)
+            if proc.poll() is None:
+                timed_out_flag["value"] = True
+                _terminate_group(proc, grace_seconds=2.0)
+
+        watchdog = threading.Thread(target=_watchdog, name="claude-cli-watchdog", daemon=True)
+        watchdog.start()
+
+        try:
+            assert proc.stdin is not None
             proc.stdin.write(prompt)
             proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
 
-            # Read stream-json lines and emit live events
-            output_lines = []
-            result_data = None
+        output_lines: list[str] = []
+        result_data: dict | None = None
+        raw_events: list[dict] = []
 
+        assert proc.stdout is not None
+        try:
             for line in proc.stdout:
                 line = line.strip()
                 if not line:
@@ -86,99 +146,104 @@ class ClaudeCLIWorker:
 
                 try:
                     event = json.loads(line)
-                    event_type = event.get("type", "")
-
-                    # Emit live log via event_bus
-                    from src.api.ws.events import event_bus
-                    if event_type == "assistant":
-                        msg = event.get("message", {})
-                        content = msg.get("content", [])
-                        for block in content:
-                            if block.get("type") == "tool_use":
-                                event_bus.emit("cli:tool_use", {
-                                    "tool": block.get("name", ""),
-                                    "input": str(block.get("input", {}))[:100],
-                                })
-                            elif block.get("type") == "text":
-                                text = block.get("text", "")[:100]
-                                if text:
-                                    event_bus.emit("cli:text", {"text": text})
-                    elif event_type == "result":
-                        result_data = event
                 except json.JSONDecodeError:
-                    pass
+                    continue
 
-            proc.wait(timeout=10)
-            duration_ms = int((time.time() - start) * 1000)
+                raw_events.append(event)
+                event_type = event.get("type", "")
 
-            if proc.returncode != 0 and result_data is None:
-                stderr = proc.stderr.read() if proc.stderr else ""
-                return CLIResult(
-                    success=False,
-                    error=stderr or f"Exit code: {proc.returncode}",
-                    duration_ms=duration_ms,
-                )
+                from src.api.ws.events import event_bus
+                if event_type == "assistant":
+                    msg = event.get("message", {})
+                    for block in msg.get("content", []):
+                        if block.get("type") == "tool_use":
+                            event_bus.emit("cli:tool_use", {
+                                "tool": block.get("name", ""),
+                                "input": str(block.get("input", {}))[:100],
+                            })
+                        elif block.get("type") == "text":
+                            text = block.get("text", "")[:100]
+                            if text:
+                                event_bus.emit("cli:text", {"text": text})
+                elif event_type == "result":
+                    result_data = event
+        except Exception:
+            pass
 
-            # Parse final result
-            if result_data:
-                output_text = result_data.get("result", "")
-                cost = result_data.get("total_cost_usd", 0.0)
-                usage = result_data.get("usage", {})
-                input_tokens = usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
-                output_tokens = usage.get("output_tokens", 0)
-            else:
-                # Fallback: try to parse last line as JSON
-                output_text = "\n".join(output_lines[-5:]) if output_lines else ""
-                cost = 0.0
-                input_tokens = 0
-                output_tokens = 0
+        # Wait for process to actually exit so watchdog can finish.
+        try:
+            proc.wait(timeout=max(1.0, deadline - time.time() + 5))
+        except subprocess.TimeoutExpired:
+            _terminate_group(proc, grace_seconds=2.0)
 
+        duration_ms = int((time.time() - start) * 1000)
+
+        if timed_out_flag["value"]:
             return CLIResult(
-                success=True,
-                output=output_text[:2000],
-                cost=cost,
+                success=False,
+                error=f"Claude CLI timed out after {timeout}s",
                 duration_ms=duration_ms,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
+                timed_out=True,
+                raw_events=raw_events,
             )
 
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            return CLIResult(success=False, error="Claude CLI timed out after 300s", duration_ms=300000)
-        except FileNotFoundError:
-            return CLIResult(success=False, error=f"Claude CLI not found at {self.claude_path}")
+        if proc.returncode != 0 and result_data is None:
+            stderr = proc.stderr.read() if proc.stderr else ""
+            return CLIResult(
+                success=False,
+                error=stderr or f"Exit code: {proc.returncode}",
+                duration_ms=duration_ms,
+                raw_events=raw_events,
+            )
 
-    def _parse_json_output(self, stdout: str) -> tuple[str, float, int, int]:
-        text = ""
-        cost = 0.0
-        input_tokens = 0
-        output_tokens = 0
+        if result_data:
+            output_text = result_data.get("result", "")
+            cost = result_data.get("total_cost_usd", 0.0)
+            usage = result_data.get("usage", {})
+            input_tokens = usage.get("input_tokens", 0)
+            cache_creation = usage.get("cache_creation_input_tokens", 0)
+            cache_read = usage.get("cache_read_input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
+        else:
+            output_text = "\n".join(output_lines[-5:]) if output_lines else ""
+            cost = 0.0
+            input_tokens = 0
+            cache_creation = 0
+            cache_read = 0
+            output_tokens = 0
 
-        try:
-            data = json.loads(stdout)
-            if isinstance(data, dict):
-                text = data.get("result", data.get("text", stdout))
-                cost = data.get("total_cost_usd", data.get("cost_usd", 0.0))
-                usage = data.get("usage", {})
-                input_tokens = usage.get("input_tokens", 0)
-                output_tokens = usage.get("output_tokens", 0)
-                # Include cache tokens in input count
-                cache_creation = usage.get("cache_creation_input_tokens", 0)
-                cache_read = usage.get("cache_read_input_tokens", 0)
-                if cache_creation or cache_read:
-                    input_tokens += cache_creation + cache_read
-            elif isinstance(data, list):
-                text_parts = []
-                for item in data:
-                    if isinstance(item, dict):
-                        if item.get("type") == "result":
-                            text_parts.append(item.get("result", ""))
-                            cost += item.get("total_cost_usd", 0.0)
-                            u = item.get("usage", {})
-                            input_tokens += u.get("input_tokens", 0)
-                            output_tokens += u.get("output_tokens", 0)
-                text = "\n".join(text_parts) if text_parts else stdout
-        except json.JSONDecodeError:
-            text = stdout
+        return CLIResult(
+            success=True,
+            output=output_text[:2000],
+            cost=cost,
+            duration_ms=duration_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_creation_tokens=cache_creation,
+            cache_read_tokens=cache_read,
+            raw_events=raw_events,
+        )
 
-        return text, cost, input_tokens, output_tokens
+
+def _terminate_group(proc: subprocess.Popen, grace_seconds: float = 2.0) -> None:
+    """SIGTERM the process group, then SIGKILL after ``grace_seconds`` if still alive."""
+    try:
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, OSError):
+        return
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except (ProcessLookupError, OSError):
+        return
+
+    deadline = time.time() + grace_seconds
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            return
+        time.sleep(0.1)
+
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, OSError):
+        return

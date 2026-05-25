@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from src.api.validators import safe_page_segment
 from src.pipeline.engine import BaseStep, StepResult, StepContext
 from src.pipeline.steps.step1_spec_load import load_spec
 from src.pipeline.steps.step2_spec_verify import verify_spec
@@ -84,13 +85,14 @@ class Step4ReactGen(BaseStep):
         if context.spec is None or context.api_contract is None:
             return StepResult(success=False, error="Missing spec or api_contract in context")
 
-        output_dir = self.output_base / context.page_id.replace(".", "/")
+        page_id = safe_page_segment(context.page_id)
+        output_dir = self.output_base / page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Find original screenshot
         screenshot_path = None
         if self.screenshots_dir:
-            page_screenshots = self.screenshots_dir / context.page_id.replace(".", "_")
+            page_screenshots = self.screenshots_dir / page_id.replace(".", "_")
             candidates = [
                 page_screenshots / "original.png",
                 page_screenshots / "full_page.png",
@@ -162,7 +164,8 @@ class Step5JavaGen(BaseStep):
         if context.spec is None or context.api_contract is None:
             return StepResult(success=False, error="Missing spec or api_contract in context")
 
-        output_dir = self.output_base / context.page_id.replace(".", "/")
+        page_id = safe_page_segment(context.page_id)
+        output_dir = self.output_base / page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result = await generate_java(
@@ -190,8 +193,9 @@ class Step6JavaTest(BaseStep):
         if context.spec is None:
             return StepResult(success=False, error="Missing spec in context")
 
+        page_id = safe_page_segment(context.page_id)
         java_files = context.generated_files.get("java_generation", [])
-        output_dir = self.output_base / context.page_id.replace(".", "/")
+        output_dir = self.output_base / page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result = await generate_java_tests(
@@ -213,7 +217,8 @@ class Step7Integration(BaseStep):
         self.backend_dir = backend_dir
 
     async def execute(self, context: StepContext) -> StepResult:
-        frontend_dir = self.frontend_base / context.page_id.replace(".", "/")
+        page_id = safe_page_segment(context.page_id)
+        frontend_dir = self.frontend_base / page_id.replace(".", "/")
 
         if not frontend_dir.exists():
             return StepResult(success=False, error=f"Frontend dir not found: {frontend_dir}")
@@ -240,18 +245,27 @@ class Step8Equivalence(BaseStep):
     name = "equivalence_check"
     step_number = 8
 
-    def __init__(self, mcp_server_path: Path):
+    def __init__(self, mcp_server_path: Path, backend_root: Path | None = None):
         self.mcp_server_path = mcp_server_path
+        self.backend_root = backend_root
 
     async def execute(self, context: StepContext) -> StepResult:
         java_files = context.generated_files.get("java_generation", [])
+        search_roots = [self.backend_root] if self.backend_root else None
         result = await check_equivalence(
             spec=context.spec,
             java_files=java_files,
+            search_roots=search_roots,
         )
         return StepResult(
             success=result.success,
-            artifacts={"covered": result.covered, "missing": result.missing},
+            artifacts={
+                "covered": result.covered,
+                "missing": result.missing,
+                "extra": result.extra,
+                "endpoints": result.endpoints,
+            },
+            error=None if result.success else f"Missing operations: {result.missing}",
         )
 
 
@@ -281,6 +295,9 @@ def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
             frontend_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
             backend_dir=project_root / "apps" / "backend",
         ),
-        Step8Equivalence(mcp_server_path=settings.mcp_server_path),
+        Step8Equivalence(
+            mcp_server_path=settings.mcp_server_path,
+            backend_root=project_root / "apps" / "backend",
+        ),
         Step9Complete(),
     ]

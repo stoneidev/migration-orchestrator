@@ -26,7 +26,7 @@ def client():
 
     deps.set_session_factory(factory)
     yield TestClient(app)
-    deps._SessionFactory = None
+    deps.reset_session_factory()
 
 
 def test_health_endpoint(client):

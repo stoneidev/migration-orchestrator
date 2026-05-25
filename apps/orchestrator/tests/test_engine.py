@@ -3,7 +3,14 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from src.db.models import Base, Page, StepExecution
-from src.pipeline.engine import PipelineEngine, StepResult, StepContext, BaseStep
+from src.pipeline.engine import (
+    PipelineEngine,
+    StepResult,
+    StepContext,
+    BaseStep,
+    _set_page_state,
+)
+from src.pipeline.state_machine import InvalidTransitionError, PageState
 
 
 class MockPassStep(BaseStep):
@@ -187,3 +194,49 @@ async def test_cost_is_recorded(db_factory):
         page = s.get(Page, "bbs.alert_close")
         assert page.total_cost == 0.04
         assert page.total_input_tokens == 5000
+
+
+def test_set_page_state_rejects_invalid_transition():
+    page = Page(id="x", module="m", migration_status="complete")
+    with pytest.raises(InvalidTransitionError):
+        _set_page_state(page, PageState.RUNNING)
+
+
+def test_set_page_state_allows_blocked_to_running():
+    page = Page(id="x", module="m", migration_status="blocked")
+    _set_page_state(page, PageState.RUNNING)
+    assert page.migration_status == "running"
+
+
+def test_set_page_state_is_idempotent():
+    page = Page(id="x", module="m", migration_status="running")
+    _set_page_state(page, PageState.RUNNING)
+    assert page.migration_status == "running"
+
+
+@pytest.mark.asyncio
+async def test_engine_does_not_treat_step9_as_special_when_more_steps_exist(db_factory):
+    """C6/H11 regression: completion must be based on the actual final step number."""
+
+    class StepA(BaseStep):
+        name = "a"
+        step_number = 1
+
+        async def execute(self, context: StepContext) -> StepResult:
+            return StepResult(success=True, artifacts={})
+
+    class StepB(BaseStep):
+        name = "b"
+        step_number = 2
+
+        async def execute(self, context: StepContext) -> StepResult:
+            return StepResult(success=True, artifacts={})
+
+    engine = PipelineEngine(steps=[StepA(), StepB()], session_factory=db_factory)
+    await engine.run_next_step("bbs.alert_close")
+    await engine.run_next_step("bbs.alert_close")
+
+    with db_factory() as s:
+        page = s.get(Page, "bbs.alert_close")
+        assert page.current_step == 2
+        assert page.migration_status == "complete"

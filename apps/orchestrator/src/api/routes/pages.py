@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from src.api.validators import validate_page_id
 from src.db.deps import get_db
 from src.db.models import Page
 
@@ -29,6 +30,7 @@ def list_pages(db: Session = Depends(get_db)):
 
 @router.get("/pages/{page_id}")
 def get_page(page_id: str, db: Session = Depends(get_db)):
+    page_id = validate_page_id(page_id)
     page = db.get(Page, page_id)
     if page is None:
         raise HTTPException(

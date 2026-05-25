@@ -160,13 +160,29 @@ async def generate_java(
     if not result.success:
         return JavaGenResult(success=False, error=result.error)
 
-    # Collect created files
-    created_files = []
+    # Collect created Java files. In production the layout is
+    # ``backend_root/src/main/java/...`` but tests (and ad-hoc invocations)
+    # may place generated files directly under ``output_dir`` without a
+    # ``src`` subdir, so fall back to scanning the ``output_dir`` tree.
+    created_files: list[str] = []
+    scan_roots: list[Path] = []
     java_src = backend_root / "src"
     if java_src.exists():
-        for f in java_src.rglob("*.java"):
-            if "ambassador" in str(f):
-                created_files.append(str(f.relative_to(backend_root)))
+        scan_roots.append(java_src)
+    if output_dir.exists() and output_dir != java_src:
+        scan_roots.append(output_dir)
+
+    seen: set[Path] = set()
+    for root in scan_roots:
+        for f in root.rglob("*.java"):
+            if f in seen:
+                continue
+            seen.add(f)
+            try:
+                rel = f.relative_to(backend_root)
+            except ValueError:
+                rel = f.relative_to(output_dir) if f.is_relative_to(output_dir) else f
+            created_files.append(str(rel))
 
     # Check if tests exist
     test_files = [f for f in created_files if "test" in f.lower() or "Test" in f]

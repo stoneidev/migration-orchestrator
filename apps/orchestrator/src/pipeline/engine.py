@@ -6,8 +6,32 @@ from typing import Any
 from sqlalchemy.orm import sessionmaker, Session
 
 from src.db.models import Page, StepExecution, Artifact, CostLog
-from src.pipeline.state_machine import StepState, PageState, transition_page
+from src.pipeline.state_machine import (
+    InvalidTransitionError,
+    PageState,
+    StepState,
+    transition_page,
+)
 from src.api.ws.events import event_bus
+
+
+def _set_page_state(page: Page, target: PageState) -> None:
+    """Validate and apply a page-level state transition.
+
+    All page status writes inside the engine MUST go through this helper so
+    that ``state_machine`` is the single source of truth for what's allowed.
+    Bypassing it (``page.migration_status = "running"``) was how a number of
+    invalid states could be silently entered.
+    """
+    try:
+        current = PageState(page.migration_status)
+    except ValueError as exc:
+        raise InvalidTransitionError(
+            f"Unknown current page state: {page.migration_status!r}"
+        ) from exc
+    if current == target:
+        return
+    page.migration_status = transition_page(current, target).value
 
 
 @dataclass
@@ -57,9 +81,7 @@ class PipelineEngine:
             if page is None:
                 return
 
-            current_state = PageState(page.migration_status)
-            transition_page(current_state, PageState.RUNNING)
-            page.migration_status = PageState.RUNNING.value
+            _set_page_state(page, PageState.RUNNING)
             page.started_at = datetime.utcnow()
             session.flush()
 
@@ -70,16 +92,14 @@ class PipelineEngine:
                 event_bus.emit("pipeline:step_started", {"page_id": page_id, "step": step.step_number, "step_name": step.name})
                 result = await self._execute_step(step, page, context, session)
                 if not result.success:
-                    transition_page(PageState.RUNNING, PageState.BLOCKED)
-                    page.migration_status = PageState.BLOCKED.value
+                    _set_page_state(page, PageState.BLOCKED)
                     session.commit()
                     return
 
                 context.previous_results[step.step_number] = result
                 self._update_context_from_result(context, step, result)
 
-            transition_page(PageState.RUNNING, PageState.COMPLETE)
-            page.migration_status = PageState.COMPLETE.value
+            _set_page_state(page, PageState.COMPLETE)
             page.completed_at = datetime.utcnow()
             session.commit()
 
@@ -89,15 +109,15 @@ class PipelineEngine:
             if page is None:
                 return
 
-            if page.migration_status == "queued":
-                page.migration_status = PageState.RUNNING.value
-                page.started_at = datetime.utcnow()
+            if PageState(page.migration_status) != PageState.RUNNING:
+                _set_page_state(page, PageState.RUNNING)
+                page.started_at = page.started_at or datetime.utcnow()
                 session.flush()
 
             next_step_num = page.current_step + 1
             step = next((s for s in self.steps if s.step_number == next_step_num), None)
             if step is None:
-                page.migration_status = PageState.COMPLETE.value
+                _set_page_state(page, PageState.COMPLETE)
                 page.completed_at = datetime.utcnow()
                 session.commit()
                 return
@@ -109,8 +129,9 @@ class PipelineEngine:
 
             if result.success:
                 self._update_context_from_result(context, step, result)
-                if next_step_num == 9:
-                    page.migration_status = PageState.COMPLETE.value
+                final_step_number = self.steps[-1].step_number if self.steps else next_step_num
+                if next_step_num == final_step_number:
+                    _set_page_state(page, PageState.COMPLETE)
                     page.completed_at = datetime.utcnow()
                 session.commit()
                 event_bus.emit("pipeline:step_completed", {
@@ -118,7 +139,7 @@ class PipelineEngine:
                     "status": "passed", "next_step": next_step_num + 1,
                 })
             else:
-                page.migration_status = PageState.BLOCKED.value
+                _set_page_state(page, PageState.BLOCKED)
                 session.commit()
 
     async def _rebuild_context(self, page: Page, session: Session) -> StepContext:

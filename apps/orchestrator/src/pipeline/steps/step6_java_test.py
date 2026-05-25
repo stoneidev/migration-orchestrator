@@ -1,7 +1,22 @@
+"""Step 6: run ``./gradlew test`` against the generated backend.
+
+A non-zero exit code is now reported as ``success=False`` so the pipeline can
+treat it as a real failure (and trigger retries / blocks). Infrastructure-level
+problems that are not test failures – missing ``gradlew``, gradle timeouts,
+subprocess errors – are reported via a dedicated ``warning`` field with
+``success=True`` so they don't pretend the suite passed.
+"""
+
+from __future__ import annotations
+
 import asyncio
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+_FAILED_TESTS_RE = re.compile(r"(\d+)\s+tests?\s+(?:completed|failed|errors?)", re.IGNORECASE)
 
 
 @dataclass
@@ -12,6 +27,42 @@ class JavaTestResult:
     tests_failed: int = 0
     output: str = ""
     error: str = ""
+    warning: str = ""
+    duration_ms: int = 0
+
+
+def _find_backend_root(start: Path) -> Path | None:
+    """Walk up looking for a directory that contains ``gradlew``."""
+    current = start
+    seen: set[Path] = set()
+    while current and current not in seen:
+        seen.add(current)
+        if (current / "gradlew").exists():
+            return current
+        if current.parent == current:
+            break
+        current = current.parent
+    return None
+
+
+def _parse_test_counts(output: str) -> tuple[int, int]:
+    """Best-effort parse of ``X tests completed, Y failed``-style summaries.
+
+    Prefers the explicit ``N failed`` count from the summary line; falls back
+    to counting ``FAILED`` markers (per-test) when no summary is present.
+    """
+    failed_match = re.search(r"(\d+)\s+failed", output, re.IGNORECASE)
+    if failed_match:
+        failed = int(failed_match.group(1))
+    else:
+        failed = output.count(" FAILED")
+
+    passed = 0
+    total_match = re.search(r"(\d+)\s+tests?\s+completed", output, re.IGNORECASE)
+    if total_match:
+        total = int(total_match.group(1))
+        passed = max(0, total - failed)
+    return passed, failed
 
 
 async def generate_java_tests(
@@ -19,55 +70,63 @@ async def generate_java_tests(
     java_files: list[str],
     output_dir: Path,
     worker=None,
+    timeout: int = 300,
 ) -> JavaTestResult:
-    """Run ./gradlew test directly. No CLI needed."""
+    """Run ``./gradlew test`` directly. No CLI required."""
 
-    backend_root = output_dir
-    while backend_root.name != "backend" and backend_root != backend_root.parent:
-        backend_root = backend_root.parent
-    if not (backend_root / "gradlew").exists():
-        for p in output_dir.parents:
-            if (p / "gradlew").exists():
-                backend_root = p
-                break
+    backend_root = _find_backend_root(output_dir)
+    if backend_root is None:
+        return JavaTestResult(
+            success=True,
+            warning="No gradlew found upstream of output_dir; skipping java tests",
+        )
 
-    if not (backend_root / "gradlew").exists():
-        return JavaTestResult(success=True, output="No gradlew found — skipping tests")
-
-    # Find test files
-    test_files = []
+    test_files: list[str] = []
     test_src = backend_root / "src" / "test"
     if test_src.exists():
         for f in test_src.rglob("*Test.java"):
             test_files.append(str(f.relative_to(backend_root)))
 
-    # Run gradle test
     try:
-        result = await asyncio.to_thread(
+        completed = await asyncio.to_thread(
             subprocess.run,
-            ["./gradlew", "test"],
+            ["./gradlew", "test", "--no-daemon"],
             cwd=str(backend_root),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        return JavaTestResult(
+            success=True,
+            test_files=test_files,
+            warning=f"gradle test timed out after {timeout}s",
+            output=(e.stdout or "")[-300:] if isinstance(e.stdout, str) else "",
+        )
+    except FileNotFoundError as e:
+        return JavaTestResult(
+            success=True,
+            test_files=test_files,
+            warning=f"gradle not runnable: {e}",
         )
 
-        output = result.stdout + result.stderr
-        passed = result.returncode == 0
+    output = (completed.stdout or "") + (completed.stderr or "")
+    passed_count, failed_count = _parse_test_counts(output)
 
-        if passed:
-            return JavaTestResult(success=True, test_files=test_files, output=output[-300:])
-        else:
-            # Tests failed — still pass the step with warning (integration step will fix)
-            return JavaTestResult(
-                success=True,
-                test_files=test_files,
-                tests_failed=output.count("FAILED"),
-                output=output[-300:],
-                error=f"Some tests failed but continuing (will be fixed in integration step)",
-            )
+    if completed.returncode == 0:
+        return JavaTestResult(
+            success=True,
+            test_files=test_files,
+            tests_passed=passed_count,
+            tests_failed=failed_count,
+            output=output[-500:],
+        )
 
-    except subprocess.TimeoutExpired:
-        return JavaTestResult(success=True, test_files=test_files, output="Test timeout — skipping")
-    except Exception as e:
-        return JavaTestResult(success=True, output=f"Error: {e} — skipping")
+    return JavaTestResult(
+        success=False,
+        test_files=test_files,
+        tests_passed=passed_count,
+        tests_failed=failed_count or 1,
+        output=output[-1000:],
+        error=f"gradle test failed (exit={completed.returncode}, failed={failed_count})",
+    )

@@ -23,11 +23,31 @@ def set_session_factory(factory: sessionmaker) -> None:
     _SessionFactory = factory
 
 
-def get_db() -> Generator[Session, None, None]:
+def reset_session_factory() -> None:
+    """Clear the module-level factory. Used by tests to isolate fixtures."""
+    global _SessionFactory, _engine
+    _SessionFactory = None
+    _engine = None
+
+
+def get_session_factory() -> sessionmaker:
+    """Return the live session factory, configuring the default DB if needed.
+
+    Callers MUST use this instead of importing ``_SessionFactory`` directly:
+    ``from src.db.deps import _SessionFactory`` captures whatever the module
+    variable held at import time (typically ``None``), so the imported name
+    never sees later updates from :func:`configure_db`.
+    """
     global _SessionFactory
     if _SessionFactory is None:
         configure_db()
-    session = _SessionFactory()
+    assert _SessionFactory is not None
+    return _SessionFactory
+
+
+def get_db() -> Generator[Session, None, None]:
+    factory = get_session_factory()
+    session = factory()
     try:
         yield session
         session.commit()

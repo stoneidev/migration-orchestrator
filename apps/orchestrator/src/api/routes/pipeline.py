@@ -2,10 +2,11 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, BackgroundTasks
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from pydantic import BaseModel, field_validator
+from sqlalchemy.orm import Session, sessionmaker
 
-from src.db.deps import get_db
+from src.api.validators import is_valid_page_id, validate_page_id
+from src.db.deps import get_db, get_session_factory
 from src.db.models import Page, StepExecution, Artifact
 from src.pipeline.engine import PipelineEngine
 from src.pipeline.steps.registry import create_pipeline_steps
@@ -19,23 +20,42 @@ _running_tasks: dict[str, dict] = {}
 class PipelineRunRequest(BaseModel):
     page_ids: list[str]
 
+    @field_validator("page_ids")
+    @classmethod
+    def _check_page_ids(cls, value: list[str]) -> list[str]:
+        for pid in value:
+            if not is_valid_page_id(pid):
+                raise ValueError(f"Invalid page_id: {pid}")
+        return value
+
 
 class StepRunRequest(BaseModel):
     page_id: str
+
+    @field_validator("page_id")
+    @classmethod
+    def _check_page_id(cls, value: str) -> str:
+        if not is_valid_page_id(value):
+            raise ValueError(f"Invalid page_id: {value}")
+        return value
 
 
 class StepRetryRequest(BaseModel):
     page_id: str
     step_number: int
 
+    @field_validator("page_id")
+    @classmethod
+    def _check_page_id(cls, value: str) -> str:
+        if not is_valid_page_id(value):
+            raise ValueError(f"Invalid page_id: {value}")
+        return value
 
-def _get_engine():
-    from src.db.deps import configure_db, _SessionFactory
+
+def _get_engine() -> tuple[sessionmaker, Settings]:
     settings = Settings()
-    if _SessionFactory is None:
-        configure_db(settings.database_url)
-    from src.db.deps import _SessionFactory as sf
-    return sf, settings
+    factory = get_session_factory()
+    return factory, settings
 
 
 async def _run_pipeline_bg(page_id: str, run_id: str):
@@ -92,6 +112,9 @@ def retry_step(request: StepRetryRequest, background_tasks: BackgroundTasks):
 
 
 async def _retry_step_bg(page_id: str, step_number: int, task_id: str):
+    from src.pipeline.engine import _set_page_state
+    from src.pipeline.state_machine import PageState
+
     _running_tasks[task_id]["status"] = "running"
     try:
         sf, settings = _get_engine()
@@ -100,7 +123,7 @@ async def _retry_step_bg(page_id: str, step_number: int, task_id: str):
             page = s.get(Page, page_id)
             if page:
                 page.current_step = step_number - 1
-                page.migration_status = "running"
+                _set_page_state(page, PageState.RUNNING)
                 # Delete old executions for this step
                 s.query(StepExecution).filter_by(page_id=page_id, step_number=step_number).delete()
                 s.query(Artifact).filter_by(page_id=page_id, step_number=step_number).delete()
@@ -123,6 +146,7 @@ def get_pipeline_status():
 
 @router.get("/pipeline/{page_id}/steps")
 def get_page_steps(page_id: str, db: Session = Depends(get_db)):
+    page_id = validate_page_id(page_id)
     page = db.get(Page, page_id)
     if not page:
         return {"success": False, "error": {"code": "PAGE-001", "message": "Page not found"}}

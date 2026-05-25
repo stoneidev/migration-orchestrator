@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -9,8 +10,9 @@ from pydantic import BaseModel
 from src.workers.mcp import MCPWorker
 from src.workers.analysis import AnalysisWorker
 from src.api.ws.events import event_bus
+from src.api.validators import validate_page_id
 from src.config import Settings
-from src.db.deps import _SessionFactory
+from src.db.deps import get_session_factory
 from src.db.models import SpecGenHistory
 
 router = APIRouter()
@@ -70,6 +72,10 @@ def _extract_from_url(url: str) -> tuple[str, str]:
         if page_id.startswith(prefix):
             page_id = page_id[len(prefix):]
 
+    # Normalise: lowercase + strip any path-unsafe characters so the result
+    # always passes downstream ``page_id`` validation.
+    page_id = re.sub(r"[^a-z0-9_.]", "_", page_id.lower()).strip("._")
+
     return php_path, page_id
 
 
@@ -82,7 +88,9 @@ async def start_spec_gen(request: SpecGenRequest):
     # Auto-extract php_path and page_id from URL
     auto_php_path, auto_page_id = _extract_from_url(request.url)
     session["php_path"] = request.php_path or auto_php_path
-    session["page_id"] = request.page_id or auto_page_id
+    page_id = request.page_id or auto_page_id
+    # Defensive: page_id is concatenated into filesystem paths downstream.
+    session["page_id"] = validate_page_id(page_id)
     session["status"] = "ready"
     return {"success": True, "data": {"session_id": session_id, **session}}
 
@@ -119,9 +127,8 @@ async def step3_generate(request: SpecGenStepRequest, background_tasks: Backgrou
 
 @router.get("/spec-gen/history")
 async def get_history():
-    if _SessionFactory is None:
-        return {"success": True, "data": []}
-    with _SessionFactory() as db:
+    factory = get_session_factory()
+    with factory() as db:
         records = db.query(SpecGenHistory).order_by(SpecGenHistory.created_at.desc()).limit(50).all()
         return {
             "success": True,
@@ -150,13 +157,12 @@ async def get_session_status(session_id: str):
 
 
 def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
-    if _SessionFactory is None:
-        return
     try:
+        factory = get_session_factory()
         settings = Settings()
         page_id = session.get("page_id", "")
 
-        with _SessionFactory() as db:
+        with factory() as db:
             # 1. Save to history
             record = SpecGenHistory(
                 session_id=session_id,
