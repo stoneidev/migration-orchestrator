@@ -39,7 +39,7 @@ VALID_STEP_TRANSITIONS: dict[StepState, set[StepState]] = {
 }
 
 VALID_PAGE_TRANSITIONS: dict[PageState, set[PageState]] = {
-    PageState.QUEUED: {PageState.RUNNING},
+    PageState.QUEUED: {PageState.RUNNING, PageState.BLOCKED},
     PageState.RUNNING: {PageState.COMPLETE, PageState.BLOCKED, PageState.REVIEW, PageState.FAILED},
     PageState.REVIEW: {PageState.RUNNING},
     PageState.BLOCKED: {PageState.RUNNING},

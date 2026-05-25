@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 
 from fastapi import APIRouter, Depends, BackgroundTasks
 from pydantic import BaseModel, field_validator
@@ -7,12 +8,34 @@ from sqlalchemy.orm import Session, sessionmaker
 from src.api.validators import is_valid_page_id, validate_page_id
 from src.db.deps import get_db, get_session_factory
 from src.db.models import Artifact, Page, PipelineTask, StepExecution
-from src.pipeline.engine import PipelineEngine
+from src.pipeline.engine import PipelineEngine, mark_page_failed
 from src.pipeline.steps.registry import STEP_DEFINITIONS, create_pipeline_steps
 from src.config import Settings
 from src.util.clock import utcnow
 
 router = APIRouter()
+
+_page_semaphore: asyncio.Semaphore | None = None
+
+
+def init_page_semaphore(limit: int) -> None:
+    """Initialize the global page-run concurrency limit (called from lifespan)."""
+    global _page_semaphore
+    _page_semaphore = asyncio.Semaphore(max(1, limit))
+
+
+def reset_page_semaphore() -> None:
+    """Clear the semaphore — for tests only."""
+    global _page_semaphore
+    _page_semaphore = None
+
+
+def _get_page_semaphore() -> asyncio.Semaphore:
+    global _page_semaphore
+    if _page_semaphore is None:
+        init_page_semaphore(Settings().max_parallel_pages)
+    return _page_semaphore
+
 
 class PipelineRunRequest(BaseModel):
     page_ids: list[str]
@@ -102,27 +125,35 @@ def _update_task(task_id: str, *, status: str, error: str | None = None) -> None
 
 
 async def _run_pipeline_bg(page_id: str, task_id: str):
-    _update_task(task_id, status="running")
-    try:
-        sf, settings = _get_engine()
-        steps = create_pipeline_steps(settings)
-        engine = PipelineEngine(steps=steps, session_factory=sf)
-        await engine.run(page_id)
-        _update_task(task_id, status="completed")
-    except Exception as e:
-        _update_task(task_id, status="failed", error=str(e))
+    async with _get_page_semaphore():
+        _update_task(task_id, status="running")
+        sf = None
+        try:
+            sf, settings = _get_engine()
+            steps = create_pipeline_steps(settings)
+            engine = PipelineEngine(steps=steps, session_factory=sf)
+            await engine.run(page_id)
+            _update_task(task_id, status="completed")
+        except Exception as e:
+            _update_task(task_id, status="failed", error=str(e))
+            if sf is not None:
+                mark_page_failed(page_id, sf, error=str(e))
 
 
 async def _run_single_step_bg(page_id: str, task_id: str):
-    _update_task(task_id, status="running")
-    try:
-        sf, settings = _get_engine()
-        steps = create_pipeline_steps(settings)
-        engine = PipelineEngine(steps=steps, session_factory=sf)
-        await engine.run_next_step(page_id)
-        _update_task(task_id, status="completed")
-    except Exception as e:
-        _update_task(task_id, status="failed", error=str(e))
+    async with _get_page_semaphore():
+        _update_task(task_id, status="running")
+        sf = None
+        try:
+            sf, settings = _get_engine()
+            steps = create_pipeline_steps(settings)
+            engine = PipelineEngine(steps=steps, session_factory=sf)
+            await engine.run_next_step(page_id)
+            _update_task(task_id, status="completed")
+        except Exception as e:
+            _update_task(task_id, status="failed", error=str(e))
+            if sf is not None:
+                mark_page_failed(page_id, sf, error=str(e))
 
 
 @router.post("/pipeline/run", status_code=202)
@@ -161,27 +192,31 @@ async def _retry_step_bg(page_id: str, step_number: int, task_id: str):
     from src.pipeline.engine import _set_page_state
     from src.pipeline.state_machine import PageState
 
-    _update_task(task_id, status="running")
-    try:
-        sf, settings = _get_engine()
-        # Reset page to before this step
-        with sf() as s:
-            page = s.get(Page, page_id)
-            if page:
-                page.current_step = step_number - 1
-                _set_page_state(page, PageState.RUNNING)
-                # Delete old executions for this step
-                s.query(StepExecution).filter_by(page_id=page_id, step_number=step_number).delete()
-                s.query(Artifact).filter_by(page_id=page_id, step_number=step_number).delete()
-                s.commit()
+    async with _get_page_semaphore():
+        _update_task(task_id, status="running")
+        sf = None
+        try:
+            sf, settings = _get_engine()
+            # Reset page to before this step
+            with sf() as s:
+                page = s.get(Page, page_id)
+                if page:
+                    page.current_step = step_number - 1
+                    _set_page_state(page, PageState.RUNNING)
+                    # Delete old executions for this step
+                    s.query(StepExecution).filter_by(page_id=page_id, step_number=step_number).delete()
+                    s.query(Artifact).filter_by(page_id=page_id, step_number=step_number).delete()
+                    s.commit()
 
-        # Run the step
-        steps = create_pipeline_steps(settings)
-        engine = PipelineEngine(steps=steps, session_factory=sf)
-        await engine.run_next_step(page_id)
-        _update_task(task_id, status="completed")
-    except Exception as e:
-        _update_task(task_id, status="failed", error=str(e))
+            # Run the step
+            steps = create_pipeline_steps(settings)
+            engine = PipelineEngine(steps=steps, session_factory=sf)
+            await engine.run_next_step(page_id)
+            _update_task(task_id, status="completed")
+        except Exception as e:
+            _update_task(task_id, status="failed", error=str(e))
+            if sf is not None:
+                mark_page_failed(page_id, sf, error=str(e))
 
 
 @router.get("/pipeline/status")

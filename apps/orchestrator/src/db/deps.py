@@ -17,7 +17,7 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import create_engine, inspect, Engine
+from sqlalchemy import create_engine, event, inspect, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.models import Base
@@ -30,6 +30,24 @@ _ALEMBIC_INI = Path(__file__).resolve().parent.parent.parent / "alembic.ini"
 _BASELINE_REVISION = "cb0a1fb6f34a"
 _BASELINE_TABLES = {"pages", "step_executions", "artifacts", "reviews", "cost_log", "spec_gen_history"}
 _RUNTIME_STATE_TABLES = {"pipeline_tasks", "spec_gen_sessions"}
+
+
+def create_sqlalchemy_engine(url: str) -> Engine:
+    """Create a SQLAlchemy engine with SQLite WAL pragmas when applicable."""
+    connect_args: dict = {}
+    if url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False, "timeout": 30}
+    engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
+    if url.startswith("sqlite"):
+
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record) -> None:
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.close()
+
+    return engine
 
 
 def _is_on_disk_sqlite(url: str) -> bool:
@@ -85,19 +103,16 @@ def configure_db(
     so the test suite doesn't pay the migration overhead.
     """
     global _engine, _SessionFactory
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-
     on_disk = _is_on_disk_sqlite(url) or not url.startswith("sqlite")
 
     if on_disk and url.startswith("sqlite"):
         db_path = url.replace("sqlite:///", "", 1)
-        # Ensure parent directory exists (data/orchestrator.db lives under data/).
         Path(db_path).expanduser().parent.mkdir(parents=True, exist_ok=True)
 
     if on_disk and run_migrations:
         _run_alembic_for(url)
 
-    _engine = create_engine(url, connect_args=connect_args)
+    _engine = create_sqlalchemy_engine(url)
 
     if not on_disk:
         # In-memory tests: just create tables directly.

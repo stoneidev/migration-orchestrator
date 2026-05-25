@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
@@ -240,3 +241,26 @@ async def test_engine_does_not_treat_step9_as_special_when_more_steps_exist(db_f
         page = s.get(Page, "bbs.alert_close")
         assert page.current_step == 2
         assert page.migration_status == "complete"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_context_warns_when_spec_load_fails(db_factory):
+    engine = PipelineEngine(steps=[], session_factory=db_factory)
+
+    with db_factory() as session:
+        page = session.get(Page, "bbs.alert_close")
+        with patch(
+            "src.pipeline.steps.step1_spec_load.load_spec",
+            side_effect=FileNotFoundError("spec missing"),
+        ):
+            with patch("src.config.Settings") as mock_settings_cls:
+                mock_settings_cls.return_value.specs_dir = "/nonexistent"
+                with patch("src.pipeline.engine.event_bus.emit") as mock_emit:
+                    context = await engine._rebuild_context(page, session)
+
+    assert context.spec is None
+    mock_emit.assert_called_once()
+    call_args = mock_emit.call_args
+    assert call_args[0][0] == "log"
+    assert call_args[0][1]["level"] == "warning"
+    assert "bbs.alert_close" in call_args[0][1]["message"]

@@ -1,32 +1,21 @@
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from src.pipeline.steps.step1_spec_load import load_spec
 from src.pipeline.steps.step2_spec_verify import verify_spec
 from src.pipeline.steps.step3_api_contract import generate_api_contract
+from src.workers.claude_cli import CLIResult
 from src.workers.mcp import MCPWorker
 
-SPECS_DIR = Path("/Users/stoni/Projects/silicon2/harness/specs")
-MCP_PATH = Path("/Users/stoni/.mcp-servers/php-analyzer")
 
-
-@pytest.mark.asyncio
-async def test_step2_verify_spec_passes_for_alert_close():
-    spec = load_spec("bbs.alert_close", specs_dir=SPECS_DIR)
-    worker = MCPWorker(mcp_server_path=MCP_PATH)
-    async with worker.connect():
-        result = await verify_spec(spec, worker)
-    assert result.success is True
-    assert result.gaps == []
-
-
-@pytest.mark.asyncio
-async def test_step3_api_contract_generates_yaml():
-    spec = load_spec("bbs.alert_close", specs_dir=SPECS_DIR)
-
-    mock_response = MagicMock()
-    mock_response.text = """openapi: "3.1.0"
+async def _mock_cli_invoke(**kwargs):
+    cwd = kwargs.get("cwd")
+    if cwd:
+        out = Path(cwd)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "openapi.yaml").write_text(
+            """openapi: "3.1.0"
 info:
   title: bbs.alert_close API
   version: "1.0.0"
@@ -38,16 +27,32 @@ paths:
         "200":
           description: Success
 """
-    mock_response.input_tokens = 500
-    mock_response.output_tokens = 200
-    mock_response.model = "sonnet"
-    mock_response.cost = 0.004
+        )
+    return CLIResult(
+        success=True,
+        output="done",
+        cost=0.004,
+        input_tokens=500,
+        output_tokens=200,
+    )
 
-    async def fake_invoke(**kwargs):
-        return mock_response
 
-    with patch("src.pipeline.steps.step3_api_contract.analysis_worker") as mock_worker:
-        mock_worker.invoke = fake_invoke
+@pytest.mark.asyncio
+async def test_step2_verify_spec_passes_for_alert_close(specs_dir, mcp_server_path):
+    spec = load_spec("bbs.alert_close", specs_dir=specs_dir)
+    worker = MCPWorker(mcp_server_path=mcp_server_path)
+    async with worker.connect():
+        result = await verify_spec(spec, worker)
+    assert result.success is True
+    assert result.gaps == []
+
+
+@pytest.mark.asyncio
+async def test_step3_api_contract_generates_yaml(specs_dir):
+    spec = load_spec("bbs.alert_close", specs_dir=specs_dir)
+
+    with patch("src.pipeline.steps.step3_api_contract.ClaudeCLIWorker") as mock_worker_cls:
+        mock_worker_cls.return_value.invoke = AsyncMock(side_effect=_mock_cli_invoke)
         result = await generate_api_contract(spec)
 
     assert result.success is True

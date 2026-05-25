@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
+from src.config import Settings
 from src.workers.claude_cli import ClaudeCLIWorker
 from src.api.ws.events import event_bus
 
@@ -118,7 +119,7 @@ async def _init_frontend(project_root: Path):
     frontend_dir = project_root / "apps" / "frontend"
     frontend_dir.mkdir(parents=True, exist_ok=True)
 
-    worker = ClaudeCLIWorker()
+    worker = ClaudeCLIWorker(claude_path=Settings().claude_path)
     result = await worker.invoke(
         prompt=FRONTEND_PROMPT,
         model="sonnet",
@@ -142,7 +143,7 @@ async def _init_backend(project_root: Path):
     backend_dir = project_root / "apps" / "backend"
     backend_dir.mkdir(parents=True, exist_ok=True)
 
-    worker = ClaudeCLIWorker()
+    worker = ClaudeCLIWorker(claude_path=Settings().claude_path)
     result = await worker.invoke(
         prompt=BACKEND_PROMPT,
         model="sonnet",
@@ -165,7 +166,7 @@ class InitRequest(BaseModel):
 
 @router.post("/project/init", status_code=202)
 async def init_project(request: InitRequest, background_tasks: BackgroundTasks):
-    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    project_root = Settings().project_root
 
     for target in request.targets:
         if target == "frontend":
@@ -181,7 +182,7 @@ async def init_project(request: InitRequest, background_tasks: BackgroundTasks):
 
 @router.get("/project/status")
 async def project_status():
-    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    project_root = Settings().project_root
     frontend_exists = (project_root / "apps" / "frontend" / "package.json").exists()
     backend_exists = (project_root / "apps" / "backend" / "build.gradle.kts").exists()
 

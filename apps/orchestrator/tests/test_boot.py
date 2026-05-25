@@ -23,8 +23,9 @@ def test_settings_defaults():
         specs_dir=Path("/tmp/specs"),
         php_project_root=Path("/tmp/php"),
         mcp_server_path=Path("/tmp/mcp"),
+        _env_file=None,
     )
-    assert settings.max_parallel_pages == 5
+    assert settings.max_parallel_pages == 1
     assert settings.max_parallel_generation == 2
     assert settings.visual_ssim_threshold == 0.85
     assert settings.visual_diff_threshold_pct == 15.0

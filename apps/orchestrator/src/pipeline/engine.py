@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import logging
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import sessionmaker, Session
@@ -13,6 +15,8 @@ from src.pipeline.state_machine import (
 )
 from src.api.ws.events import event_bus
 from src.util.clock import utcnow_naive
+
+log = logging.getLogger(__name__)
 
 
 def _set_page_state(page: Page, target: PageState) -> None:
@@ -34,9 +38,42 @@ def _set_page_state(page: Page, target: PageState) -> None:
     page.migration_status = transition_page(current, target).value
 
 
+def mark_page_failed(
+    page_id: str,
+    session_factory: sessionmaker,
+    error: str | None = None,
+) -> None:
+    """Mark a page as failed after an unhandled background pipeline error.
+
+    Only transitions pages that are currently ``RUNNING``; other states are
+    left unchanged (e.g. rollback left the page ``queued``, or step failure
+    already set ``blocked``).
+    """
+    with session_factory() as session:
+        page = session.get(Page, page_id)
+        if page is None:
+            return
+        try:
+            current = PageState(page.migration_status)
+        except ValueError:
+            log.warning("Cannot mark page %s failed: unknown status %r", page_id, page.migration_status)
+            return
+        if current != PageState.RUNNING:
+            return
+        _set_page_state(page, PageState.FAILED)
+        session.commit()
+
+    payload: dict[str, str] = {"page_id": page_id, "status": PageState.FAILED.value}
+    if error:
+        payload["error"] = error
+    event_bus.emit("page_state", payload)
+    log.error("page %s marked failed: %s", page_id, error)
+
+
 @dataclass
 class StepContext:
     page_id: str
+    workspace_root: Path | None = None
     spec: dict | None = None
     api_contract: str | None = None
     generated_files: dict[str, list[str]] = field(default_factory=dict)
@@ -72,15 +109,78 @@ class PipelineEngine:
         steps: list[BaseStep],
         session_factory: sessionmaker,
         max_retries: int = 3,
+        worktree_manager: Any | None = None,
     ):
         self.steps = sorted(steps, key=lambda s: s.step_number)
         self.session_factory = session_factory
         self.max_retries = max_retries
+        self._worktree_manager = worktree_manager
+
+    def _get_worktree_manager(self, project_root: Path):
+        if self._worktree_manager is None:
+            from src.workers.worktree import WorktreeManager
+
+            self._worktree_manager = WorktreeManager(project_root)
+        return self._worktree_manager
+
+    def _prepare_workspace(self, page_id: str, context: StepContext, settings) -> None:
+        if not settings.use_worktree:
+            return
+        mgr = self._get_worktree_manager(settings.project_root)
+        wt_path = mgr.ensure(page_id, "migration")
+        context.workspace_root = wt_path
+        event_bus.emit(
+            "worktree:ready",
+            {"page_id": page_id, "path": str(wt_path)},
+        )
+        log.info("worktree ready for %s at %s", page_id, wt_path)
+
+    def _commit_step(self, context: StepContext, step: BaseStep, result: StepResult) -> None:
+        if context.workspace_root is None:
+            return
+        from src.git.manager import GitManager
+
+        git = GitManager(repo_root=context.workspace_root)
+        message = git.commit_step(
+            context.page_id,
+            step.step_number,
+            step.name,
+            model=result.model_used or "",
+            cost=result.cost,
+        )
+        if message:
+            event_bus.emit(
+                "git:commit",
+                {
+                    "page_id": context.page_id,
+                    "step": step.step_number,
+                    "message": message[:120],
+                },
+            )
 
     async def run(self, page_id: str) -> None:
+        from src.config import Settings
+
+        settings = Settings()
         with self.session_factory() as session:
             page = session.get(Page, page_id)
             if page is None:
+                return
+
+            if settings.enforce_project_budget and page.total_cost >= settings.project_budget:
+                _set_page_state(page, PageState.BLOCKED)
+                session.commit()
+                event_bus.emit(
+                    "log",
+                    {
+                        "level": "warning",
+                        "message": (
+                            f"Project budget exceeded "
+                            f"(${page.total_cost:.2f} >= ${settings.project_budget:.2f})"
+                        ),
+                        "page_id": page_id,
+                    },
+                )
                 return
 
             _set_page_state(page, PageState.RUNNING)
@@ -88,6 +188,7 @@ class PipelineEngine:
             session.flush()
 
             context = StepContext(page_id=page.id)
+            self._prepare_workspace(page_id, context, settings)
             event_bus.emit("pipeline:started", {"page_id": page_id})
 
             for step in self.steps:
@@ -100,12 +201,16 @@ class PipelineEngine:
 
                 context.previous_results[step.step_number] = result
                 self._update_context_from_result(context, step, result)
+                self._commit_step(context, step, result)
 
             _set_page_state(page, PageState.COMPLETE)
             page.completed_at = utcnow_naive()
             session.commit()
 
     async def run_next_step(self, page_id: str) -> None:
+        from src.config import Settings
+
+        settings = Settings()
         with self.session_factory() as session:
             page = session.get(Page, page_id)
             if page is None:
@@ -125,12 +230,14 @@ class PipelineEngine:
                 return
 
             context = await self._rebuild_context(page, session)
+            self._prepare_workspace(page_id, context, settings)
 
             event_bus.emit("pipeline:step_started", {"page_id": page_id, "step": step.step_number, "step_name": step.name})
             result = await self._execute_step(step, page, context, session)
 
             if result.success:
                 self._update_context_from_result(context, step, result)
+                self._commit_step(context, step, result)
                 final_step_number = self.steps[-1].step_number if self.steps else next_step_num
                 if next_step_num == final_step_number:
                     _set_page_state(page, PageState.COMPLETE)
@@ -153,8 +260,20 @@ class PipelineEngine:
             settings = Settings()
             spec = load_spec(page.id, specs_dir=settings.specs_dir)
             context.spec = spec
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning(
+                "Failed to load spec for %s during context rebuild: %s",
+                page.id,
+                exc,
+            )
+            event_bus.emit(
+                "log",
+                {
+                    "level": "warning",
+                    "message": f"Failed to load spec for {page.id}: {exc}",
+                    "page_id": page.id,
+                },
+            )
 
         # Minimal API contract from spec (no file I/O to avoid stuck)
         if context.spec:
@@ -206,6 +325,7 @@ class PipelineEngine:
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
                     cache_read_tokens=result.cache_read_tokens,
+                    cache_creation_tokens=result.cache_creation_tokens,
                     cost=result.cost,
                 )
                 session.add(cost_entry)

@@ -13,6 +13,12 @@ from src.pipeline.steps.step8_equivalence import check_equivalence
 from src.pipeline.steps.step9_complete import complete_migration
 from src.workers.mcp import MCPWorker
 from src.config import Settings
+from src.pipeline.workspace import (
+    backend_dir as ws_backend_dir,
+    frontend_admin_dir as ws_frontend_admin_dir,
+    frontend_app_dir as ws_frontend_app_dir,
+    java_sources_dir as ws_java_sources_dir,
+)
 
 STEP_DEFINITIONS: list[tuple[int, str]] = [
     (1, "spec_load"),
@@ -46,14 +52,18 @@ class Step2SpecVerify(BaseStep):
     name = "spec_verify"
     step_number = 2
 
-    def __init__(self, mcp_server_path: Path):
+    def __init__(self, mcp_server_path: Path, mcp_python_path: str = "python3"):
         self.mcp_server_path = mcp_server_path
+        self.mcp_python_path = mcp_python_path
 
     async def execute(self, context: StepContext) -> StepResult:
         if context.spec is None:
             return StepResult(success=False, error="No spec in context")
 
-        worker = MCPWorker(mcp_server_path=self.mcp_server_path)
+        worker = MCPWorker(
+            mcp_server_path=self.mcp_server_path,
+            python_path=self.mcp_python_path,
+        )
         async with worker.connect():
             result = await verify_spec(context.spec, worker)
 
@@ -107,6 +117,7 @@ class Step4ReactGen(BaseStep):
         frontend_dir: Path | None = None,
         screenshots_dir: Path | None = None,
         *,
+        default_project_root: Path | None = None,
         dev_port: int = 3100,
         dev_startup_timeout_s: int = 30,
         ssim_threshold: float = 0.85,
@@ -116,6 +127,7 @@ class Step4ReactGen(BaseStep):
         self.output_base = output_base
         self.frontend_dir = frontend_dir
         self.screenshots_dir = screenshots_dir
+        self.default_project_root = default_project_root or output_base.parent.parent.parent.parent
         self.dev_port = dev_port
         self.dev_startup_timeout_s = dev_startup_timeout_s
         self.ssim_threshold = ssim_threshold
@@ -127,7 +139,10 @@ class Step4ReactGen(BaseStep):
             return StepResult(success=False, error="Missing spec or api_contract in context")
 
         page_id = safe_page_segment(context.page_id)
-        output_dir = self.output_base / page_id.replace(".", "/")
+        if context.workspace_root is not None:
+            output_dir = ws_frontend_admin_dir(context, self.default_project_root) / page_id.replace(".", "/")
+        else:
+            output_dir = self.output_base / page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Find original screenshot
@@ -174,7 +189,10 @@ class Step4ReactGen(BaseStep):
         visual_artifacts: dict[str, object] = {"files": result.files_created}
         if screenshot_path and screenshot_path.exists():
             try:
-                frontend_dir = self.frontend_dir or self.output_base.parent.parent.parent.parent  # apps/frontend
+                if context.workspace_root is not None:
+                    frontend_dir = ws_frontend_app_dir(context, self.default_project_root)
+                else:
+                    frontend_dir = self.frontend_dir or self.output_base.parent.parent.parent.parent
                 page_route = "/admin/" + context.page_id.replace(".", "/")
                 passed, comparison, react_shot = await verify_visual_similarity(
                     original_screenshot=screenshot_path,
@@ -260,15 +278,19 @@ class Step5JavaGen(BaseStep):
     name = "java_generation"
     step_number = 5
 
-    def __init__(self, output_base: Path):
+    def __init__(self, output_base: Path, *, default_project_root: Path | None = None):
         self.output_base = output_base
+        self.default_project_root = default_project_root or output_base.parent.parent.parent.parent.parent
 
     async def execute(self, context: StepContext) -> StepResult:
         if context.spec is None or context.api_contract is None:
             return StepResult(success=False, error="Missing spec or api_contract in context")
 
         page_id = safe_page_segment(context.page_id)
-        output_dir = self.output_base / page_id.replace(".", "/")
+        if context.workspace_root is not None:
+            output_dir = ws_java_sources_dir(context, self.default_project_root) / page_id.replace(".", "/")
+        else:
+            output_dir = self.output_base / page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result = await generate_java(
@@ -305,8 +327,15 @@ class Step6JavaTest(BaseStep):
     name = "java_test"
     step_number = 6
 
-    def __init__(self, output_base: Path, *, strict_infra_failures: bool = True):
+    def __init__(
+        self,
+        output_base: Path,
+        *,
+        default_project_root: Path | None = None,
+        strict_infra_failures: bool = True,
+    ):
         self.output_base = output_base
+        self.default_project_root = default_project_root or output_base
         self.strict_infra_failures = strict_infra_failures
 
     async def execute(self, context: StepContext) -> StepResult:
@@ -315,7 +344,11 @@ class Step6JavaTest(BaseStep):
 
         page_id = safe_page_segment(context.page_id)
         java_files = context.generated_files.get("java_generation", [])
-        output_dir = self.output_base / page_id.replace(".", "/")
+        if context.workspace_root is not None:
+            backend = ws_backend_dir(context, self.default_project_root)
+            output_dir = backend / page_id.replace(".", "/")
+        else:
+            output_dir = self.output_base / page_id.replace(".", "/")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result = await generate_java_tests(
@@ -355,13 +388,25 @@ class Step7Integration(BaseStep):
     name = "integration"
     step_number = 7
 
-    def __init__(self, frontend_base: Path, backend_dir: Path | None = None):
+    def __init__(
+        self,
+        frontend_base: Path,
+        backend_dir: Path | None = None,
+        *,
+        default_project_root: Path | None = None,
+    ):
         self.frontend_base = frontend_base
         self.backend_dir = backend_dir
+        self.default_project_root = default_project_root or frontend_base.parent.parent.parent.parent
 
     async def execute(self, context: StepContext) -> StepResult:
         page_id = safe_page_segment(context.page_id)
-        frontend_dir = self.frontend_base / page_id.replace(".", "/")
+        if context.workspace_root is not None:
+            frontend_dir = ws_frontend_admin_dir(context, self.default_project_root) / page_id.replace(".", "/")
+            backend = ws_backend_dir(context, self.default_project_root)
+        else:
+            frontend_dir = self.frontend_base / page_id.replace(".", "/")
+            backend = self.backend_dir
 
         if not frontend_dir.exists():
             return StepResult(success=False, error=f"Frontend dir not found: {frontend_dir}")
@@ -370,7 +415,7 @@ class Step7Integration(BaseStep):
             spec=context.spec,
             api_contract=context.api_contract,
             frontend_dir=frontend_dir,
-            backend_dir=self.backend_dir,
+            backend_dir=backend,
         )
 
         if result.success:
@@ -402,13 +447,25 @@ class Step8Equivalence(BaseStep):
     name = "equivalence_check"
     step_number = 8
 
-    def __init__(self, mcp_server_path: Path, backend_root: Path | None = None):
+    def __init__(
+        self,
+        mcp_server_path: Path,
+        backend_root: Path | None = None,
+        *,
+        default_project_root: Path | None = None,
+    ):
         self.mcp_server_path = mcp_server_path
         self.backend_root = backend_root
+        self.default_project_root = default_project_root or backend_root
 
     async def execute(self, context: StepContext) -> StepResult:
         java_files = context.generated_files.get("java_generation", [])
-        search_roots = [self.backend_root] if self.backend_root else None
+        if context.workspace_root is not None:
+            search_roots = [ws_backend_dir(context, self.default_project_root)]
+        elif self.backend_root:
+            search_roots = [self.backend_root]
+        else:
+            search_roots = None
         result = await check_equivalence(
             spec=context.spec,
             java_files=java_files,
@@ -436,33 +493,43 @@ class Step9Complete(BaseStep):
 
 
 def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
-    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    project_root = settings.project_root
     return [
         Step1SpecLoad(specs_dir=settings.specs_dir),
-        Step2SpecVerify(mcp_server_path=settings.mcp_server_path),
+        Step2SpecVerify(
+            mcp_server_path=settings.mcp_server_path,
+            mcp_python_path=settings.mcp_python_path,
+        ),
         Step3ApiContract(),
         Step4ReactGen(
             output_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
             frontend_dir=project_root / "apps" / "frontend",
             screenshots_dir=project_root / "screenshots",
+            default_project_root=project_root,
             dev_port=settings.frontend_dev_port,
             dev_startup_timeout_s=settings.frontend_dev_startup_timeout_s,
             ssim_threshold=settings.visual_ssim_threshold,
             diff_threshold_pct=settings.visual_diff_threshold_pct,
             strict_visual_gate=settings.strict_visual_gate,
         ),
-        Step5JavaGen(output_base=project_root / "apps" / "backend" / "src" / "main" / "java"),
+        Step5JavaGen(
+            output_base=project_root / "apps" / "backend" / "src" / "main" / "java",
+            default_project_root=project_root,
+        ),
         Step6JavaTest(
             output_base=project_root / "apps" / "backend",
+            default_project_root=project_root,
             strict_infra_failures=settings.strict_java_test,
         ),
         Step7Integration(
             frontend_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
             backend_dir=project_root / "apps" / "backend",
+            default_project_root=project_root,
         ),
         Step8Equivalence(
             mcp_server_path=settings.mcp_server_path,
             backend_root=project_root / "apps" / "backend",
+            default_project_root=project_root,
         ),
         Step9Complete(),
     ]

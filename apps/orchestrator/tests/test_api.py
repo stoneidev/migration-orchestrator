@@ -72,6 +72,7 @@ def test_pipeline_run_updates_status(client):
     response = client.post("/api/pipeline/run", json={"page_ids": ["bbs.alert_close"]})
     assert response.status_code == 202
 
-    # Check page status changed to running
-    detail = client.get("/api/pages/bbs.alert_close").json()
-    assert detail["data"]["migration_status"] == "running"
+    status = client.get("/api/pipeline/status").json()
+    assert status["success"] is True
+    tasks = status["data"].values()
+    assert any(t["page_id"] == "bbs.alert_close" for t in tasks)

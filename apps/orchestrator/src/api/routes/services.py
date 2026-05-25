@@ -6,6 +6,8 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
+from src.config import Settings
+
 router = APIRouter()
 
 _services: dict[str, dict] = {
@@ -48,7 +50,7 @@ def start_frontend():
         svc["status"] = "running"
         return {"success": True, "data": {"status": "already running", "url": f"http://localhost:{svc['port']}"}}
 
-    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    project_root = Settings().project_root
     frontend_dir = project_root / "apps" / "frontend"
 
     proc = subprocess.Popen(
@@ -85,7 +87,7 @@ def start_backend():
         svc["status"] = "running"
         return {"success": True, "data": {"status": "already running", "url": f"http://localhost:{svc['port']}"}}
 
-    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    project_root = Settings().project_root
     backend_dir = project_root / "apps" / "backend"
 
     proc = subprocess.Popen(

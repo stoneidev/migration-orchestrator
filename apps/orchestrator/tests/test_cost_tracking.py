@@ -116,6 +116,56 @@ async def test_engine_persists_cache_read_tokens(db_factory):
 
 
 @pytest.mark.asyncio
+async def test_engine_persists_cache_creation_tokens(db_factory):
+    class CacheWriteStep(BaseStep):
+        name = "cache_write"
+        step_number = 1
+
+        async def execute(self, context: StepContext) -> StepResult:
+            return StepResult(
+                success=True,
+                model_used="sonnet",
+                input_tokens=100,
+                output_tokens=50,
+                cache_creation_tokens=2_000,
+                cost=0.01,
+            )
+
+    engine = PipelineEngine(steps=[CacheWriteStep()], session_factory=db_factory)
+    await engine.run("shop.products")
+
+    with db_factory() as s:
+        logs = s.query(CostLog).filter_by(page_id="shop.products").all()
+        assert len(logs) == 1
+        assert logs[0].cache_creation_tokens == 2_000
+
+
+@pytest.mark.asyncio
+async def test_engine_blocks_when_budget_exceeded(db_factory, monkeypatch):
+    monkeypatch.setenv("ENFORCE_PROJECT_BUDGET", "true")
+
+    class NoOpStep(BaseStep):
+        name = "noop"
+        step_number = 1
+
+        async def execute(self, context: StepContext) -> StepResult:
+            return StepResult(success=True)
+
+    with db_factory() as s:
+        page = s.get(Page, "shop.products")
+        page.total_cost = 25_000.0
+        s.commit()
+
+    engine = PipelineEngine(steps=[NoOpStep()], session_factory=db_factory)
+    await engine.run("shop.products")
+
+    with db_factory() as s:
+        page = s.get(Page, "shop.products")
+        assert page.migration_status == "blocked"
+        assert page.current_step == 0
+
+
+@pytest.mark.asyncio
 async def test_page_total_cost_equals_sum_of_cost_logs(db_factory):
     class A(BaseStep):
         name = "a"

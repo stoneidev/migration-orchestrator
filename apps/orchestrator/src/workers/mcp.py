@@ -8,7 +8,7 @@ from mcp.client.stdio import stdio_client
 
 
 class MCPWorker:
-    def __init__(self, mcp_server_path: Path, python_path: str = "/opt/homebrew/opt/python@3.11/libexec/bin/python3"):
+    def __init__(self, mcp_server_path: Path, python_path: str = "python3"):
         self.server_path = mcp_server_path
         self.python_path = python_path
         self._session: ClientSession | None = None

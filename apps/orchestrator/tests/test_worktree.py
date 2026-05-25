@@ -34,3 +34,9 @@ def test_create_worktree_creates_branch(worktree_mgr):
     branch_name = worktree_mgr.get_branch_name("bbs.alert_close", "java")
     assert "bbs.alert_close" in branch_name
     assert "java" in branch_name
+
+
+def test_ensure_reuses_existing_worktree(worktree_mgr):
+    first = worktree_mgr.create("bbs.alert_close", "migration")
+    second = worktree_mgr.ensure("bbs.alert_close", "migration")
+    assert first == second

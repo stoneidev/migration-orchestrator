@@ -40,7 +40,7 @@ class CLIResult:
 class ClaudeCLIWorker:
     def __init__(
         self,
-        claude_path: str = "/opt/homebrew/bin/claude",
+        claude_path: str = "claude",
         mcp_config: str | None = None,
         default_timeout: int = DEFAULT_TIMEOUT_SECONDS,
     ):
