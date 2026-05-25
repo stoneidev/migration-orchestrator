@@ -2,7 +2,17 @@ import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from src.workers.playwright import PlaywrightWorker, ScreenshotResult
+from src.workers.playwright import PageCapture, PlaywrightWorker, ScreenshotResult
+
+
+def test_page_capture_default_lists_are_empty():
+    capture = PageCapture(success=True)
+    assert capture.headings == []
+    assert capture.buttons == []
+    # The dataclass uses default_factory so each instance gets a fresh list.
+    other = PageCapture(success=True)
+    other.headings.append("hi")
+    assert capture.headings == []
 
 
 def test_playwright_worker_init():

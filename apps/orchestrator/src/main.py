@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 import asyncio
+import logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,10 +13,13 @@ from src.api.routes.spec_gen import router as spec_gen_router
 from src.api.routes.services import router as services_router
 from src.api.ws.events import event_bus
 from src.db.deps import configure_db, get_db  # noqa: F401 — get_db re-exported for tests
+from src.logging_setup import configure_logging
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging()
+    logging.getLogger(__name__).info("orchestrator starting up")
     event_bus.set_loop(asyncio.get_running_loop())
     try:
         from src.config import Settings

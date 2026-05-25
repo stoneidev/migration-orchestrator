@@ -8,13 +8,18 @@ from src.util.clock import utcnow
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
+import logging
+
 from src.workers.mcp import MCPWorker
 from src.workers.analysis import AnalysisWorker
+from src.workers.playwright import PlaywrightWorker
 from src.api.ws.events import event_bus
 from src.api.validators import validate_page_id
 from src.config import Settings
 from src.db.deps import get_session_factory
 from src.db.models import SpecGenHistory
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -219,62 +224,37 @@ async def _do_capture(session_id: str):
     session = _get_session(session_id)
     settings = Settings()
 
-    try:
-        from playwright.async_api import async_playwright
+    event_bus.emit("spec_gen:log", {"session_id": session_id, "message": "Launching Playwright (headless)..."})
 
-        event_bus.emit("spec_gen:log", {"session_id": session_id, "message": "Launching Playwright (headless)..."})
+    worker = PlaywrightWorker(
+        base_url=settings.pw_base_url,
+        admin_id=settings.pw_admin_id,
+        admin_pw=settings.pw_admin_pw,
+        screenshots_dir=Path(settings.screenshots_dir),
+    )
 
-        screenshots_dir = Path(settings.screenshots_dir) / session["page_id"]
-        screenshots_dir.mkdir(parents=True, exist_ok=True)
+    event_bus.emit("spec_gen:log", {"session_id": session_id, "message": f"Navigating to {session['url']}..."})
+    capture = await worker.capture_for_spec(
+        target_url=session["url"],
+        page_id=session["page_id"],
+    )
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(viewport={"width": 430, "height": 932})
-            page = await context.new_page()
-
-            # Login
-            await page.goto(f"{settings.pw_base_url}/manage-account/gologin.php", timeout=60000)
-            await page.wait_for_timeout(2000)
-            email = page.locator('input[name="mb_id"]:visible').first
-            if await email.count() > 0:
-                await email.fill(settings.pw_admin_id)
-            pw = page.locator('input[type="password"]:visible').first
-            if await pw.count() > 0:
-                await pw.fill(settings.pw_admin_pw)
-            submit = page.locator('input[type="submit"]:visible').first
-            if await submit.count() > 0:
-                await submit.click()
-            await page.wait_for_timeout(5000)
-
-            # Navigate to target
-            event_bus.emit("spec_gen:log", {"session_id": session_id, "message": f"Navigating to {session['url']}..."})
-            await page.goto(session["url"], timeout=60000)
-            await page.wait_for_timeout(5000)
-
-            # Capture
-            screenshot_path = screenshots_dir / "original.png"
-            await page.screenshot(path=str(screenshot_path), full_page=True)
-
-            # Extract page structure
-            headings = await page.locator("h1,h2,h3,h4").all_text_contents()
-            buttons = await page.locator("button, a[class*='btn']").all_text_contents()
-
-            session["screenshot"] = {
-                "path": str(screenshot_path),
-                "url": page.url,
-                "title": await page.title(),
-                "headings": [h.strip() for h in headings if h.strip()][:10],
-                "buttons": [b.strip() for b in buttons if b.strip()][:10],
-            }
-            session["status"] = "captured"
-            await browser.close()
-
-        event_bus.emit("spec_gen:step_completed", {"session_id": session_id, "step": 1, "status": "success"})
-
-    except Exception as e:
+    if not capture.success:
         session["status"] = "error"
-        session["error"] = str(e)
-        event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 1, "error": str(e)[:200]})
+        session["error"] = capture.error
+        log.warning("spec-gen capture failed for %s: %s", session_id, capture.error)
+        event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 1, "error": capture.error[:200]})
+        return
+
+    session["screenshot"] = {
+        "path": capture.screenshot_path,
+        "url": capture.url,
+        "title": capture.title,
+        "headings": capture.headings,
+        "buttons": capture.buttons,
+    }
+    session["status"] = "captured"
+    event_bus.emit("spec_gen:step_completed", {"session_id": session_id, "step": 1, "status": "success"})
 
 
 async def _do_mcp_analysis(session_id: str):
