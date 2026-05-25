@@ -47,7 +47,7 @@ class ClaudeCLIWorker:
         cmd = [
             self.claude_path,
             "--print",
-            "--output-format", "json",
+            "--output-format", "stream-json",
             "--model", model,
             "--max-turns", str(max_turns),
         ]
@@ -60,28 +60,81 @@ class ClaudeCLIWorker:
 
         start = time.time()
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                input=prompt,
-                capture_output=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=300,
                 cwd=str(cwd) if cwd else None,
             )
+
+            # Send prompt and close stdin
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+
+            # Read stream-json lines and emit live events
+            output_lines = []
+            result_data = None
+
+            for line in proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                output_lines.append(line)
+
+                try:
+                    event = json.loads(line)
+                    event_type = event.get("type", "")
+
+                    # Emit live log via event_bus
+                    from src.api.ws.events import event_bus
+                    if event_type == "assistant":
+                        msg = event.get("message", {})
+                        content = msg.get("content", [])
+                        for block in content:
+                            if block.get("type") == "tool_use":
+                                event_bus.emit("cli:tool_use", {
+                                    "tool": block.get("name", ""),
+                                    "input": str(block.get("input", {}))[:100],
+                                })
+                            elif block.get("type") == "text":
+                                text = block.get("text", "")[:100]
+                                if text:
+                                    event_bus.emit("cli:text", {"text": text})
+                    elif event_type == "result":
+                        result_data = event
+                except json.JSONDecodeError:
+                    pass
+
+            proc.wait(timeout=10)
             duration_ms = int((time.time() - start) * 1000)
 
-            if result.returncode != 0:
+            if proc.returncode != 0 and result_data is None:
+                stderr = proc.stderr.read() if proc.stderr else ""
                 return CLIResult(
                     success=False,
-                    error=result.stderr or f"Exit code: {result.returncode}",
+                    error=stderr or f"Exit code: {proc.returncode}",
                     duration_ms=duration_ms,
                 )
 
-            output_text, cost, input_tokens, output_tokens = self._parse_json_output(result.stdout)
+            # Parse final result
+            if result_data:
+                output_text = result_data.get("result", "")
+                cost = result_data.get("total_cost_usd", 0.0)
+                usage = result_data.get("usage", {})
+                input_tokens = usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+            else:
+                # Fallback: try to parse last line as JSON
+                output_text = "\n".join(output_lines[-5:]) if output_lines else ""
+                cost = 0.0
+                input_tokens = 0
+                output_tokens = 0
 
             return CLIResult(
                 success=True,
-                output=output_text,
+                output=output_text[:2000],
                 cost=cost,
                 duration_ms=duration_ms,
                 input_tokens=input_tokens,
@@ -89,6 +142,7 @@ class ClaudeCLIWorker:
             )
 
         except subprocess.TimeoutExpired:
+            proc.kill()
             return CLIResult(success=False, error="Claude CLI timed out after 300s", duration_ms=300000)
         except FileNotFoundError:
             return CLIResult(success=False, error=f"Claude CLI not found at {self.claude_path}")

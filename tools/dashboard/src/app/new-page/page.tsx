@@ -6,9 +6,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 const API = "http://localhost:8000";
 
 export default function NewPageSpec() {
-  const [url, setUrl] = useState("https://www.stylekorean.com/myambassador?device=mobile");
-  const [phpPath, setPhpPath] = useState("mobile/shop/ambassador/my_page.php");
-  const [pageId, setPageId] = useState("ambassador.my_page");
+  const [url, setUrl] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -29,7 +27,7 @@ export default function NewPageSpec() {
     const res = await fetch(`${API}/api/spec-gen/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, php_path: phpPath, page_id: pageId }),
+      body: JSON.stringify({ url }),
     });
     const data = await res.json();
     if (data.success) {
@@ -90,24 +88,23 @@ export default function NewPageSpec() {
       <div className="content">
         {/* Input */}
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-          <h3 style={{ fontSize: 13, marginBottom: 12 }}>New Page Configuration</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <div>
-              <label style={{ fontSize: 11, color: "var(--text3)", display: "block", marginBottom: 4 }}>Page URL</label>
-              <input value={url} onChange={(e) => setUrl(e.target.value)} style={{ width: "100%", padding: "7px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 11 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: "var(--text3)", display: "block", marginBottom: 4 }}>PHP File Path</label>
-              <input value={phpPath} onChange={(e) => setPhpPath(e.target.value)} style={{ width: "100%", padding: "7px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 11 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: "var(--text3)", display: "block", marginBottom: 4 }}>Page ID</label>
-              <input value={pageId} onChange={(e) => setPageId(e.target.value)} style={{ width: "100%", padding: "7px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 11 }} />
-            </div>
+          <h3 style={{ fontSize: 13, marginBottom: 12 }}>New Page</h3>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://www.stylekorean.com/shop/mp_question.php"
+              style={{ flex: 1, padding: "8px 12px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}
+            />
+            <button className="btn btn-primary" onClick={startSession} disabled={!!sessionId || !url}>
+              {sessionId ? `Session: ${sessionId}` : "Start"}
+            </button>
           </div>
-          <button className="btn btn-primary" onClick={startSession} disabled={!!sessionId}>
-            {sessionId ? `Session: ${sessionId}` : "Create Session"}
-          </button>
+          {session && (
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+              PHP: {session.php_path || "auto-detect"} · ID: {session.page_id || "auto-generated"}
+            </div>
+          )}
         </div>
 
         {/* Pipeline Steps */}
@@ -200,7 +197,7 @@ export default function NewPageSpec() {
                 <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 12 }}>
                   이제 이 Spec으로 마이그레이션 파이프라인을 실행할 수 있습니다.
                 </div>
-                <a href={`/page-detail?id=${pageId}`} className="btn btn-primary">
+                <a href={`/page-detail?id=${session?.page_id || ""}`} className="btn btn-primary">
                   Start Migration Pipeline →
                 </a>
               </div>

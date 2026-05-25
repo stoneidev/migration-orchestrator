@@ -63,10 +63,10 @@ class Step3ApiContract(BaseStep):
             return StepResult(
                 success=True,
                 artifacts={"api_contract": result.content},
-                model_used="sonnet",
+                model_used="haiku",
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
-                cost=0.0,
+                cost=result.cost,
             )
         return StepResult(success=False, error=result.error)
 

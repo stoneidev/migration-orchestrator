@@ -48,13 +48,41 @@ def _get_session(session_id: str) -> dict:
 
 # ---- API Endpoints ----
 
+def _extract_from_url(url: str) -> tuple[str, str]:
+    """Extract php_path and page_id from URL automatically."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    path = parsed.path.strip("/")
+
+    # Extract PHP filename: /shop/mp_question.php → shop/mp_question.php
+    php_path = path if path.endswith(".php") else ""
+
+    # Generate page_id from path
+    # /shop/mp_question.php → shop.mp_question
+    # /myambassador → ambassador.my_page
+    if php_path:
+        page_id = php_path.replace("/", ".").replace(".php", "")
+    else:
+        page_id = path.replace("/", ".").strip(".")
+
+    # Clean up common prefixes
+    for prefix in ["mobile.", "adm.", "www."]:
+        if page_id.startswith(prefix):
+            page_id = page_id[len(prefix):]
+
+    return php_path, page_id
+
+
 @router.post("/spec-gen/start")
 async def start_spec_gen(request: SpecGenRequest):
     session_id = f"sg-{datetime.utcnow().strftime('%H%M%S')}"
     session = _get_session(session_id)
     session["url"] = request.url
-    session["php_path"] = request.php_path
-    session["page_id"] = request.page_id or request.url.split("/")[-1].split("?")[0]
+
+    # Auto-extract php_path and page_id from URL
+    auto_php_path, auto_page_id = _extract_from_url(request.url)
+    session["php_path"] = request.php_path or auto_php_path
+    session["page_id"] = request.page_id or auto_page_id
     session["status"] = "ready"
     return {"success": True, "data": {"session_id": session_id, **session}}
 
@@ -125,10 +153,14 @@ def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
     if _SessionFactory is None:
         return
     try:
+        settings = Settings()
+        page_id = session.get("page_id", "")
+
         with _SessionFactory() as db:
+            # 1. Save to history
             record = SpecGenHistory(
                 session_id=session_id,
-                page_id=session.get("page_id", ""),
+                page_id=page_id,
                 url=session.get("url", ""),
                 php_path=session.get("php_path", ""),
                 status="complete",
@@ -139,9 +171,39 @@ def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
                 spec_path=spec_path,
             )
             db.add(record)
+
+            # 2. Register in pages table (for pipeline)
+            from src.db.models import Page
+            existing = db.get(Page, page_id)
+            if not existing:
+                db.add(Page(
+                    id=page_id,
+                    module=page_id.split(".")[0] if "." in page_id else "unknown",
+                    title=spec.get("meta", {}).get("title", page_id),
+                    spec_status="draft",
+                    spec_score=0.0,
+                    complexity="medium",
+                    migration_status="queued",
+                ))
+
             db.commit()
-    except Exception:
-        pass
+
+        # 3. Copy spec to specs directory (for pipeline Step 1)
+        import shutil
+        specs_dir = settings.specs_dir
+        target = specs_dir / f"{page_id}.aispec.json"
+        # Ensure spec has meta.id
+        if "meta" not in spec:
+            spec["meta"] = {}
+        spec["meta"]["id"] = page_id
+        spec["meta"]["status"] = "draft"
+        target.write_text(json.dumps(spec, indent=2, ensure_ascii=False))
+
+        event_bus.emit("spec_gen:registered", {"page_id": page_id, "spec_path": str(target)})
+
+    except Exception as e:
+        import traceback
+        event_bus.emit("spec_gen:log", {"message": f"Save error: {e} — {traceback.format_exc()[:200]}"})
 
 
 # ---- Background Tasks ----

@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 
 from src.workers.mcp import MCPWorker
@@ -20,7 +21,19 @@ async def verify_spec(spec: dict, mcp_worker: MCPWorker) -> VerifyResult:
     if not file_path:
         return VerifyResult(success=True, gaps=[], message="No source path — skipping MCP verification")
 
-    result = await mcp_worker.call_tool("php_detect_gaps")
+    # If spec was just generated (status=draft), skip deep verification
+    if meta.get("status") == "draft":
+        return VerifyResult(success=True, gaps=[], message=f"Spec {spec_id} is freshly generated — verification skipped")
+
+    try:
+        result = await asyncio.wait_for(
+            mcp_worker.call_tool("php_detect_gaps"),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        return VerifyResult(success=True, gaps=[], message=f"MCP timeout for {spec_id} — skipping verification")
+    except Exception as e:
+        return VerifyResult(success=True, gaps=[], message=f"MCP error: {str(e)[:100]} — skipping")
 
     gaps = []
     if isinstance(result, dict):

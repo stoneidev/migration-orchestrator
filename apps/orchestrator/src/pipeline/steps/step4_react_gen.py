@@ -17,32 +17,32 @@ class ReactGenResult:
 
 REACT_PROMPT_TEMPLATE = """You are recreating an existing PHP web page as a React/Next.js component.
 
-## CRITICAL TASK
-1. Use the Playwright MCP tool to navigate to: {url}
-2. Take a screenshot and CAREFULLY observe every visual element
-3. Create React components that look IDENTICAL to what you see
-4. After creating, start the dev server and compare visually
+## CRITICAL: Replicate the EXACT visual appearance from the screenshot.
 
-## Steps to follow:
-1. First, use playwright_navigate to open {url}
-2. Use playwright_screenshot to capture the page
-3. Analyze every element: layout, colors, fonts, spacing, images, text
-4. Write React code that replicates it exactly
-5. Use 'use client' directive, Tailwind CSS for styling
-6. Include mock data so it renders without a backend
-7. Mobile viewport (430px width)
+The screenshot file is at: {screenshot_path}
+Read this image file and replicate every visual element exactly.
 
-## Spec (for dynamic behavior reference ONLY, not for UI)
+## Rules:
+1. Use 'use client' directive
+2. Tailwind CSS for styling — match colors, spacing, fonts exactly
+3. Include ALL visible text, images, buttons, sections from the screenshot
+4. Include mock data inline so it renders WITHOUT a backend
+5. Mobile viewport (430px width)
+6. Do NOT invent new designs — copy the screenshot exactly
+7. Use placeholder image URLs if needed
+
+## Spec (for dynamic behavior reference ONLY, not for visual design)
 - Operations: {operations}
 - Business Rules: {business_rules_summary}
 
-## Output files in current directory:
-- page.tsx (Next.js App Router entry)
-- components/ (sub-components)
-- mock-data.ts (data matching what you see on the page)
-- types.ts
+## API Contract (for data structure reference only)
+{api_contract_summary}
 
-DO NOT invent designs. Copy EXACTLY what you see in the browser.
+## Output files in current directory:
+- page.tsx (Next.js App Router entry point)
+- components/ (sub-components as needed)
+- mock-data.ts (realistic mock data)
+- types.ts (TypeScript interfaces)
 """
 
 
@@ -80,16 +80,12 @@ async def generate_react(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # MCP config for Playwright access
-    mcp_config_path = str(Path(__file__).parent.parent.parent.parent / "mcp-playwright.json")
-
     result: CLIResult = await worker.invoke(
         prompt=prompt,
         model="sonnet",
-        max_turns=20,
+        max_turns=15,
         cwd=output_dir,
-        allowed_tools=["Write", "Edit", "Bash", "Read", "mcp__playwright__playwright_navigate", "mcp__playwright__playwright_screenshot", "mcp__playwright__playwright_click", "mcp__playwright__playwright_get_visible_text"],
-        mcp_config=mcp_config_path,
+        allowed_tools=["Write", "Edit", "Bash", "Read"],
     )
 
     if not result.success:
