@@ -11,6 +11,12 @@ class JavaGenResult:
     tests_passed: bool = False
     output: str = ""
     error: str = ""
+    cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    duration_ms: int = 0
 
 
 JAVA_TDD_PROMPT = """You are implementing a Spring Boot feature using STRICT TDD principles.
@@ -158,7 +164,16 @@ async def generate_java(
     )
 
     if not result.success:
-        return JavaGenResult(success=False, error=result.error)
+        return JavaGenResult(
+            success=False,
+            error=result.error,
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
+        )
 
     # Collect created Java files. In production the layout is
     # ``backend_root/src/main/java/...`` but tests (and ad-hoc invocations)
@@ -193,4 +208,10 @@ async def generate_java(
         tests_passed=len(test_files) > 0,
         output=result.output[:500],
         error="" if created_files else "No Java files generated",
+        cost=result.cost,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cache_creation_tokens=result.cache_creation_tokens,
+        cache_read_tokens=result.cache_read_tokens,
+        duration_ms=result.duration_ms,
     )

@@ -10,6 +10,12 @@ class IntegrationResult:
     report: dict = field(default_factory=dict)
     files_modified: list[str] = field(default_factory=list)
     error: str = ""
+    cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    duration_ms: int = 0
 
 
 INTEGRATION_PROMPT = """You are performing end-to-end integration between a React frontend and Spring Boot backend.
@@ -174,7 +180,16 @@ async def integrate_frontend_backend(
     )
 
     if not result.success:
-        return IntegrationResult(success=False, error=result.error)
+        return IntegrationResult(
+            success=False,
+            error=result.error,
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
+        )
 
     # Check what files were modified
     modified = []
@@ -192,5 +207,11 @@ async def integrate_frontend_backend(
     return IntegrationResult(
         success=True,
         files_modified=modified[:30],
-        report={"output": result.output[:500], "cost": result.cost, "duration_ms": result.duration_ms},
+        report={"output": result.output[:500]},
+        cost=result.cost,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cache_creation_tokens=result.cache_creation_tokens,
+        cache_read_tokens=result.cache_read_tokens,
+        duration_ms=result.duration_ms,
     )

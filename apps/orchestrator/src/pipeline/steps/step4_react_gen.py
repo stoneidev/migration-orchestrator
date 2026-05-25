@@ -13,6 +13,12 @@ class ReactGenResult:
     visual_diff_percent: float = 0.0
     output: str = ""
     error: str = ""
+    cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    duration_ms: int = 0
 
 
 REACT_PROMPT_TEMPLATE = """You are recreating an existing PHP web page as a React/Next.js component.
@@ -89,7 +95,16 @@ async def generate_react(
     )
 
     if not result.success:
-        return ReactGenResult(success=False, error=result.error)
+        return ReactGenResult(
+            success=False,
+            error=result.error,
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
+        )
 
     # Collect created files
     created_files = []
@@ -101,12 +116,27 @@ async def generate_react(
                 created_files.append(str(f.relative_to(output_dir)))
 
     if not created_files:
-        return ReactGenResult(success=False, error="No .tsx/.ts files generated")
+        return ReactGenResult(
+            success=False,
+            error="No .tsx/.ts files generated",
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
+        )
 
     return ReactGenResult(
         success=True,
         files_created=created_files,
         output=result.output[:500],
+        cost=result.cost,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cache_creation_tokens=result.cache_creation_tokens,
+        cache_read_tokens=result.cache_read_tokens,
+        duration_ms=result.duration_ms,
     )
 
 

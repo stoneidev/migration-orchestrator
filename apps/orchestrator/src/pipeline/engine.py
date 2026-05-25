@@ -51,6 +51,8 @@ class StepResult:
     model_used: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
     cost: float = 0.0
     duration_ms: int = 0
 
@@ -196,13 +198,14 @@ class PipelineEngine:
             )
             session.add(execution)
 
-            if result.cost > 0:
+            if result.cost > 0 or result.input_tokens > 0 or result.output_tokens > 0:
                 cost_entry = CostLog(
                     page_id=page.id,
                     step_number=step.step_number,
                     model=result.model_used or "unknown",
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
+                    cache_read_tokens=result.cache_read_tokens,
                     cost=result.cost,
                 )
                 session.add(cost_entry)

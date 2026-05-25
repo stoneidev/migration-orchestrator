@@ -11,7 +11,10 @@ class ContractResult:
     error: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
     cost: float = 0.0
+    duration_ms: int = 0
 
 
 API_CONTRACT_PROMPT = """Read the spec file at {spec_path} and generate an OpenAPI 3.1 YAML file.
@@ -68,23 +71,26 @@ async def generate_api_contract(
         return ContractResult(success=False, error=result.error)
 
     # Check if openapi.yaml was created
-    yaml_file = output_dir / "openapi.yaml"
-    if yaml_file.exists():
-        content = yaml_file.read_text()
+    def _result(success: bool, content: str = "", error: str = "") -> ContractResult:
         return ContractResult(
-            success=True,
+            success=success,
             content=content,
+            error=error,
             cost=result.cost,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
         )
 
-    # Maybe it wrote it with a different name
-    for f in output_dir.glob("*.yaml"):
-        content = f.read_text()
-        return ContractResult(success=True, content=content, cost=result.cost)
-    for f in output_dir.glob("*.yml"):
-        content = f.read_text()
-        return ContractResult(success=True, content=content, cost=result.cost)
+    yaml_file = output_dir / "openapi.yaml"
+    if yaml_file.exists():
+        return _result(True, content=yaml_file.read_text())
 
-    return ContractResult(success=False, error=f"CLI succeeded but no YAML file generated. Output: {result.output[:200]}")
+    for f in output_dir.glob("*.yaml"):
+        return _result(True, content=f.read_text())
+    for f in output_dir.glob("*.yml"):
+        return _result(True, content=f.read_text())
+
+    return _result(False, error=f"CLI succeeded but no YAML file generated. Output: {result.output[:200]}")

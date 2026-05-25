@@ -466,3 +466,4 @@ list 기반 connection 저장, lock 없음, 닫힌 소켓 send 실패 시 일부
 # 진행 로그
 
 - **Phase 1 완료** (2026-05-25) — C1 (`_SessionFactory` 헬퍼화), C3 (Claude CLI 실제 wall-clock 타임아웃 + process-group 종료), C4 (Step6 gradle 실패 전파, Step8 실제 endpoint 매칭), C5 (`validate_page_id` API/Pydantic/방어 검증 3-layer), C6 (`_set_page_state` 헬퍼로 상태 전이 강제 + step 9 하드코딩 제거). 부수적으로 Step5의 `"ambassador"` 하드코딩 필터 제거. 88 tests passing.
+- **Phase 2 완료** (2026-05-25) — 모델 가격표 4축(input/output/cache_write/cache_read) 재작성 + Anthropic 공시가 반영. `compute_cost` 헬퍼 추출, `AnalysisWorker`가 cache_creation/cache_read 토큰을 별도 추적. 모든 LLM step (`step3_api_contract`, `step4_react_gen`, `step5_java_gen`, `step7_integration`)이 cost·input·output·cache 토큰·duration을 자기 결과 데이터클래스 및 `StepResult`로 전파. `engine._execute_step`이 cost==0이어도 토큰만 있으면 `CostLog` 기록. 95 tests passing.

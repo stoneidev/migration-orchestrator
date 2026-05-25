@@ -67,9 +67,22 @@ class Step3ApiContract(BaseStep):
                 model_used="haiku",
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
+                cache_creation_tokens=result.cache_creation_tokens,
+                cache_read_tokens=result.cache_read_tokens,
                 cost=result.cost,
+                duration_ms=result.duration_ms,
             )
-        return StepResult(success=False, error=result.error)
+        return StepResult(
+            success=False,
+            error=result.error,
+            model_used="haiku",
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            cost=result.cost,
+            duration_ms=result.duration_ms,
+        )
 
 
 class Step4ReactGen(BaseStep):
@@ -111,7 +124,17 @@ class Step4ReactGen(BaseStep):
         )
 
         if not result.success:
-            return StepResult(success=False, error=result.error)
+            return StepResult(
+                success=False,
+                error=result.error,
+                model_used="sonnet",
+                cost=result.cost,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                cache_creation_tokens=result.cache_creation_tokens,
+                cache_read_tokens=result.cache_read_tokens,
+                duration_ms=result.duration_ms,
+            )
 
         # Visual verification
         if screenshot_path and screenshot_path.exists():
@@ -137,6 +160,13 @@ class Step4ReactGen(BaseStep):
                         success=False,
                         error=f"Visual diff too high: {diff_pct}% (threshold: 15%)",
                         artifacts={"files": result.files_created, "visual_diff": diff_pct},
+                        model_used="sonnet",
+                        cost=result.cost,
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                        cache_creation_tokens=result.cache_creation_tokens,
+                        cache_read_tokens=result.cache_read_tokens,
+                        duration_ms=result.duration_ms,
                     )
             except Exception as e:
                 # Visual check failed but files were generated — pass with warning
@@ -150,6 +180,12 @@ class Step4ReactGen(BaseStep):
             success=True,
             artifacts={"files": result.files_created, "visual_diff": result.visual_diff_percent},
             model_used="sonnet",
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
         )
 
 
@@ -178,8 +214,24 @@ class Step5JavaGen(BaseStep):
                 success=True,
                 artifacts={"files": result.files_created},
                 model_used="sonnet",
+                cost=result.cost,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                cache_creation_tokens=result.cache_creation_tokens,
+                cache_read_tokens=result.cache_read_tokens,
+                duration_ms=result.duration_ms,
             )
-        return StepResult(success=False, error=result.error)
+        return StepResult(
+            success=False,
+            error=result.error,
+            model_used="sonnet",
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
+        )
 
 
 class Step6JavaTest(BaseStep):
@@ -203,9 +255,25 @@ class Step6JavaTest(BaseStep):
             java_files=java_files,
             output_dir=output_dir,
         )
+        artifacts = {
+            "files": result.test_files,
+            "tests_passed": result.tests_passed,
+            "tests_failed": result.tests_failed,
+        }
+        if result.warning:
+            artifacts["warning"] = result.warning
         if result.success:
-            return StepResult(success=True, artifacts={"files": result.test_files}, model_used="sonnet")
-        return StepResult(success=False, error=result.error)
+            return StepResult(
+                success=True,
+                artifacts=artifacts,
+                duration_ms=result.duration_ms,
+            )
+        return StepResult(
+            success=False,
+            artifacts=artifacts,
+            error=result.error,
+            duration_ms=result.duration_ms,
+        )
 
 
 class Step7Integration(BaseStep):
@@ -235,10 +303,24 @@ class Step7Integration(BaseStep):
                 success=True,
                 artifacts={"files_modified": result.files_modified, "report": result.report},
                 model_used="sonnet",
-                cost=result.report.get("cost", 0),
-                duration_ms=result.report.get("duration_ms", 0),
+                cost=result.cost,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                cache_creation_tokens=result.cache_creation_tokens,
+                cache_read_tokens=result.cache_read_tokens,
+                duration_ms=result.duration_ms,
             )
-        return StepResult(success=False, error=result.error)
+        return StepResult(
+            success=False,
+            error=result.error,
+            model_used="sonnet",
+            cost=result.cost,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
+            duration_ms=result.duration_ms,
+        )
 
 
 class Step8Equivalence(BaseStep):
