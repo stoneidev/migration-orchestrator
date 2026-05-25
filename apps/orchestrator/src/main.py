@@ -28,8 +28,11 @@ app.include_router(services_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup():
+    import asyncio
     from src.db.deps import configure_db
     from src.config import Settings
+    from src.api.ws.events import event_bus
+    event_bus.set_loop(asyncio.get_event_loop())
     try:
         settings = Settings()
         configure_db(settings.database_url)

@@ -47,6 +47,7 @@ class ClaudeCLIWorker:
         cmd = [
             self.claude_path,
             "--print",
+            "--verbose",
             "--output-format", "stream-json",
             "--model", model,
             "--max-turns", str(max_turns),

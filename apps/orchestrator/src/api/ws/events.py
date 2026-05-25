@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from typing import Any
 
 from fastapi import WebSocket
@@ -7,7 +8,10 @@ from fastapi import WebSocket
 class EventBus:
     def __init__(self):
         self._connections: list[WebSocket] = []
-        self._queue: asyncio.Queue | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        self._loop = loop
 
     def register(self, ws: WebSocket) -> None:
         self._connections.append(ws)
@@ -18,19 +22,18 @@ class EventBus:
 
     def emit(self, event: str, data: dict[str, Any]) -> None:
         message = {"event": event, "data": data}
-        for ws in self._connections:
+        for ws in list(self._connections):
             try:
-                asyncio.get_event_loop().create_task(ws.send_json(message))
+                if self._loop and self._loop.is_running():
+                    self._loop.call_soon_threadsafe(
+                        asyncio.ensure_future,
+                        ws.send_json(message),
+                    )
+                else:
+                    # Try direct
+                    asyncio.get_event_loop().create_task(ws.send_json(message))
             except RuntimeError:
-                # No running event loop (sync context like tests)
-                if self._queue is None:
-                    self._queue = asyncio.Queue()
-                self._queue.put_nowait(message)
-
-    async def receive_from_queue(self) -> dict | None:
-        if self._queue and not self._queue.empty():
-            return await self._queue.get()
-        return None
+                pass
 
 
 event_bus = EventBus()
