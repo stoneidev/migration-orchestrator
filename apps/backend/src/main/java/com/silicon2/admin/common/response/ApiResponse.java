@@ -19,6 +19,10 @@ public class ApiResponse<T> {
     private MetaInfo meta;
     private LocalDateTime timestamp;
 
+    public static <T> ApiResponse<T> success() {
+        return new ApiResponse<>(true, null, null, null, LocalDateTime.now());
+    }
+
     public static <T> ApiResponse<T> success(T data) {
         return new ApiResponse<>(true, data, null, null, LocalDateTime.now());
     }

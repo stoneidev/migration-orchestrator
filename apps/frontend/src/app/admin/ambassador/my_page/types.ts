@@ -13,7 +13,6 @@ export interface AmbassadorReward {
 export interface AmbassadorProfile {
   name: string;
   country: string;
-  birthday: string;
-  sns: string;
-  idCardImage?: string;
+  birthDate: string;
+  skinType: string;
 }

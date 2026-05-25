@@ -8,23 +8,94 @@ from src.workers.claude_cli import ClaudeCLIWorker, CLIResult
 class JavaGenResult:
     success: bool
     files_created: list[str] = field(default_factory=list)
+    tests_passed: bool = False
     output: str = ""
     error: str = ""
 
 
-JAVA_SYSTEM_PROMPT = """You are a Java/Spring Boot specialist generating DDD/Hexagonal architecture code.
+JAVA_TDD_PROMPT = """You are implementing a Spring Boot feature using STRICT TDD principles.
+You MUST follow this exact workflow for each layer:
 
-Rules:
-- Java 21, Spring Boot 3.4
-- DDD/Hexagonal: domain/model, domain/service, domain/repository (layer별)
-- Feature별: application/ (UseCase), adapter/in/web/ (Controller), adapter/out/persistence/ (JPA)
-- Use Lombok (@Data, @Builder, @RequiredArgsConstructor)
-- Use MapStruct for DTO mapping
+1. Write code
+2. Run `./gradlew compileJava` — fix until it compiles
+3. Write test
+4. Run `./gradlew test` — fix until tests pass
+5. Move to next layer
+
+## Project Info
 - Base package: com.silicon2.admin
-- RESTful endpoints with common ApiResponse wrapper
-- Include Flyway migration SQL if DB tables needed
+- Feature package: com.silicon2.admin.ambassador.my_page
+- Java 21, Spring Boot 3.4, Lombok, MapStruct
+- JUnit 5 + Mockito + @WebMvcTest + @DataJpaTest
 
-Output files directly. Do NOT wrap in markdown code blocks."""
+## Spec (use this for business logic)
+Page: {page_id}
+Operations: {operations}
+Business Rules: {business_rules}
+Tables: {tables}
+SQL Queries: {sql_summary}
+
+## TDD Implementation Order
+
+### Layer 1: Domain Model
+Create in `src/main/java/com/silicon2/admin/ambassador/my_page/domain/model/`:
+- AmbassadorMember.java (Entity)
+- AmbassadorMemberSns.java (Entity)
+- AmbassadorStatus.java (enum: ACTIVE, INACTIVE, BANNED)
+
+Then create test in `src/test/java/com/silicon2/admin/ambassador/my_page/domain/`:
+- AmbassadorMemberTest.java (basic unit test)
+
+Run: `./gradlew compileJava` then `./gradlew test`
+Fix any errors before proceeding.
+
+### Layer 2: Repository Interface (Port Out)
+Create in `src/main/java/com/silicon2/admin/ambassador/my_page/domain/repository/`:
+- AmbassadorMemberRepository.java (interface)
+- AmbassadorMemberSnsRepository.java (interface)
+
+Run: `./gradlew compileJava`
+
+### Layer 3: UseCase (Application Layer)
+Create in `src/main/java/com/silicon2/admin/ambassador/my_page/application/`:
+- CheckAmbassadorStatusUseCase.java
+- SubmitReviewUseCase.java
+- GenerateSnsLinkUseCase.java
+
+Create DTOs in `application/dto/`:
+- AmbassadorStatusResponse.java
+- SubmitReviewRequest.java
+- GenerateSnsLinkRequest.java
+
+Create tests in `src/test/java/com/silicon2/admin/ambassador/my_page/application/`:
+- CheckAmbassadorStatusUseCaseTest.java (mock repository with Mockito)
+- SubmitReviewUseCaseTest.java
+
+Run: `./gradlew test` — fix until ALL tests pass.
+
+### Layer 4: Controller (Adapter In)
+Create in `src/main/java/com/silicon2/admin/ambassador/my_page/adapter/in/web/`:
+- AmbassadorMyPageController.java (@RestController)
+
+Create test:
+- AmbassadorMyPageControllerTest.java (@WebMvcTest, mock UseCases)
+
+Run: `./gradlew test`
+
+### Layer 5: Persistence (Adapter Out)
+Create JPA entities + repository implementations.
+Create Flyway migration SQL.
+
+Run: `./gradlew test`
+
+## IMPORTANT
+- Run gradle after EACH layer
+- If compile fails → fix immediately
+- If test fails → fix immediately
+- Do NOT proceed to next layer until current layer passes
+- Use @DisplayName with Korean descriptions in tests
+- BDD style: // given // when // then
+"""
 
 
 async def generate_java(
@@ -41,65 +112,69 @@ async def generate_java(
     business_rules = spec.get("business_rules", [])
     data_layer = spec.get("data_layer", {})
 
-    ops_desc = "\n".join(
-        f"- {op.get('id', '')}: {op.get('name', '')} ({op.get('http_method', 'GET')} {op.get('route', '')})"
+    ops_summary = "\n".join(
+        f"- {op.get('id', '')}: {op.get('name', '')} ({op.get('http_method', 'GET')})"
         for op in operations
     )
 
-    rules_desc = "\n".join(
-        f"- {rule.get('id', '')}: {rule.get('description', '')}"
-        for rule in business_rules[:10]
+    brs_summary = "\n".join(
+        f"- {br.get('id', '')}: {br.get('description', '')}"
+        for br in business_rules[:15]
     )
 
     tables = data_layer.get("tables", [])
-    tables_desc = "\n".join(
-        f"- {t.get('name', '')}: {[c.get('name', '') for c in t.get('columns', [])[:5]]}"
+    tables_summary = "\n".join(
+        f"- {t.get('name', '')}"
         for t in tables[:5]
+    ) if tables else "ambassador_member, ambassador_member_sns, ambassador_campaign_image, affiliate_member"
+
+    sql_queries = data_layer.get("queries", [])
+    sql_summary = "\n".join(
+        f"- {q.get('id', '')}: {q.get('type', '')} {q.get('description', '')}"
+        for q in sql_queries[:8]
+    ) if sql_queries else "SELECT queries on ambassador tables"
+
+    prompt = JAVA_TDD_PROMPT.format(
+        page_id=meta.get("id", "ambassador.my_page"),
+        operations=ops_summary,
+        business_rules=brs_summary,
+        tables=tables_summary,
+        sql_summary=sql_summary,
     )
 
-    prompt = f"""{JAVA_SYSTEM_PROMPT}
-
-## Page Specification
-- ID: {meta.get('id', '')}
-- Title: {meta.get('title', '')}
-- Module: {meta.get('module', meta.get('id', '').split('.')[0])}
-
-## Operations
-{ops_desc}
-
-## Business Rules
-{rules_desc}
-
-## Database Tables
-{tables_desc}
-
-## API Contract (OpenAPI)
-{api_contract[:2000]}
-
-## Task
-Generate Spring Boot implementation for this admin page.
-Create proper package structure under the current directory.
-Include Controller, Service (UseCase), Repository interface, and Entity."""
+    # Use the backend project root as cwd (where build.gradle.kts is)
+    backend_root = output_dir
+    while backend_root.name != "backend" and backend_root != backend_root.parent:
+        backend_root = backend_root.parent
+    if backend_root.name != "backend":
+        backend_root = output_dir
 
     result: CLIResult = await worker.invoke(
         prompt=prompt,
         model="sonnet",
-        max_turns=15,
-        cwd=output_dir,
+        max_turns=30,  # More turns for TDD cycles
+        cwd=backend_root,
         allowed_tools=["Write", "Edit", "Bash", "Read"],
     )
 
     if not result.success:
         return JavaGenResult(success=False, error=result.error)
 
+    # Collect created files
     created_files = []
-    if output_dir.exists():
-        for f in output_dir.rglob("*.java"):
-            created_files.append(str(f.relative_to(output_dir)))
+    java_src = backend_root / "src"
+    if java_src.exists():
+        for f in java_src.rglob("*.java"):
+            if "ambassador" in str(f):
+                created_files.append(str(f.relative_to(backend_root)))
+
+    # Check if tests exist
+    test_files = [f for f in created_files if "test" in f.lower() or "Test" in f]
 
     return JavaGenResult(
         success=len(created_files) > 0,
         files_created=created_files,
-        output=result.output[:1000],
-        error="" if created_files else "No .java files generated",
+        tests_passed=len(test_files) > 0,
+        output=result.output[:500],
+        error="" if created_files else "No Java files generated",
     )

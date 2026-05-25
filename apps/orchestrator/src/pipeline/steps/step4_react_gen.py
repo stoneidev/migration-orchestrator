@@ -17,39 +17,32 @@ class ReactGenResult:
 
 REACT_PROMPT_TEMPLATE = """You are recreating an existing PHP web page as a React/Next.js component.
 
-## CRITICAL: You must replicate the EXACT visual appearance of the original page.
+## CRITICAL TASK
+1. Use the Playwright MCP tool to navigate to: {url}
+2. Take a screenshot and CAREFULLY observe every visual element
+3. Create React components that look IDENTICAL to what you see
+4. After creating, start the dev server and compare visually
 
-The screenshot of the original PHP page is provided. Your job is to create React components that look IDENTICAL to this screenshot.
+## Steps to follow:
+1. First, use playwright_navigate to open {url}
+2. Use playwright_screenshot to capture the page
+3. Analyze every element: layout, colors, fonts, spacing, images, text
+4. Write React code that replicates it exactly
+5. Use 'use client' directive, Tailwind CSS for styling
+6. Include mock data so it renders without a backend
+7. Mobile viewport (430px width)
 
-## Original Page Info
-- URL: {url}
-- Screenshot: {screenshot_path}
-
-## Rules
-1. REPLICATE THE EXACT LAYOUT, COLORS, SPACING, FONTS from the screenshot
-2. Use Tailwind CSS to match the visual design pixel-by-pixel
-3. Include ALL visible text, images, buttons, and sections from the screenshot
-4. Use 'use client' directive
-5. Include mock data inline so the page renders WITHOUT a backend
-6. Do NOT invent new designs — copy the original exactly
-7. If there are images, use placeholder URLs or the original image URLs
-8. Mobile viewport (430px width) — the screenshot is from mobile
-
-## Spec (for dynamic behavior reference only, NOT for UI design)
+## Spec (for dynamic behavior reference ONLY, not for UI)
 - Operations: {operations}
 - Business Rules: {business_rules_summary}
 
-## API Contract (for data structure reference only)
-{api_contract_summary}
+## Output files in current directory:
+- page.tsx (Next.js App Router entry)
+- components/ (sub-components)
+- mock-data.ts (data matching what you see on the page)
+- types.ts
 
-## Output
-Create these files in the current directory:
-- page.tsx (main entry — Next.js App Router)
-- components/ (sub-components as needed)
-- mock-data.ts (realistic mock data matching the screenshot)
-- types.ts (TypeScript interfaces)
-
-The page MUST look exactly like the screenshot when rendered at 430px width.
+DO NOT invent designs. Copy EXACTLY what you see in the browser.
 """
 
 
@@ -87,12 +80,16 @@ async def generate_react(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # MCP config for Playwright access
+    mcp_config_path = str(Path(__file__).parent.parent.parent.parent / "mcp-playwright.json")
+
     result: CLIResult = await worker.invoke(
         prompt=prompt,
         model="sonnet",
-        max_turns=15,
+        max_turns=20,
         cwd=output_dir,
-        allowed_tools=["Write", "Edit", "Bash", "Read"],
+        allowed_tools=["Write", "Edit", "Bash", "Read", "mcp__playwright__playwright_navigate", "mcp__playwright__playwright_screenshot", "mcp__playwright__playwright_click", "mcp__playwright__playwright_get_visible_text"],
+        mcp_config=mcp_config_path,
     )
 
     if not result.success:

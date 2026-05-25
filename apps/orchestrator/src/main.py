@@ -5,6 +5,7 @@ from src.api.routes.pages import router as pages_router
 from src.api.routes.pipeline import router as pipeline_router
 from src.api.routes.project import router as project_router
 from src.api.routes.spec_gen import router as spec_gen_router
+from src.api.routes.services import router as services_router
 from src.api.ws.events import event_bus
 from src.db.deps import get_db  # noqa: F401 — re-export for tests
 
@@ -22,6 +23,7 @@ app.include_router(pages_router, prefix="/api")
 app.include_router(pipeline_router, prefix="/api")
 app.include_router(project_router, prefix="/api")
 app.include_router(spec_gen_router, prefix="/api")
+app.include_router(services_router, prefix="/api")
 
 
 @app.on_event("startup")

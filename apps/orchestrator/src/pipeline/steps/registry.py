@@ -7,7 +7,7 @@ from src.pipeline.steps.step3_api_contract import generate_api_contract
 from src.pipeline.steps.step4_react_gen import generate_react, verify_visual_similarity
 from src.pipeline.steps.step5_java_gen import generate_java
 from src.pipeline.steps.step6_java_test import generate_java_tests
-from src.pipeline.steps.step7_integration import check_integration
+from src.pipeline.steps.step7_integration import integrate_frontend_backend
 from src.pipeline.steps.step8_equivalence import check_equivalence
 from src.pipeline.steps.step9_complete import complete_migration
 from src.workers.mcp import MCPWorker
@@ -205,23 +205,31 @@ class Step6JavaTest(BaseStep):
 
 
 class Step7Integration(BaseStep):
-    name = "integration_test"
+    name = "integration"
     step_number = 7
 
+    def __init__(self, frontend_base: Path):
+        self.frontend_base = frontend_base
+
     async def execute(self, context: StepContext) -> StepResult:
-        if context.spec is None or context.api_contract is None:
-            return StepResult(success=False, error="Missing spec or api_contract")
+        frontend_dir = self.frontend_base / context.page_id.replace(".", "/")
 
-        react_files = context.generated_files.get("react_generation", [])
-        java_files = context.generated_files.get("java_generation", [])
+        if not frontend_dir.exists():
+            return StepResult(success=False, error=f"Frontend dir not found: {frontend_dir}")
 
-        result = await check_integration(
+        result = await integrate_frontend_backend(
             spec=context.spec,
             api_contract=context.api_contract,
-            react_files=react_files,
-            java_files=java_files,
+            frontend_dir=frontend_dir,
         )
-        return StepResult(success=result.success, artifacts={"report": result.report})
+
+        if result.success:
+            return StepResult(
+                success=True,
+                artifacts={"files_modified": result.files_modified, "report": result.report},
+                model_used="sonnet",
+            )
+        return StepResult(success=False, error=result.error)
 
 
 class Step8Equivalence(BaseStep):
@@ -232,9 +240,6 @@ class Step8Equivalence(BaseStep):
         self.mcp_server_path = mcp_server_path
 
     async def execute(self, context: StepContext) -> StepResult:
-        if context.spec is None:
-            return StepResult(success=False, error="Missing spec")
-
         java_files = context.generated_files.get("java_generation", [])
         result = await check_equivalence(
             spec=context.spec,
@@ -267,8 +272,8 @@ def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
             screenshots_dir=project_root / "screenshots",
         ),
         Step5JavaGen(output_base=project_root / "apps" / "backend" / "src" / "main" / "java"),
-        Step6JavaTest(output_base=project_root / "apps" / "backend" / "src" / "test" / "java"),
-        Step7Integration(),
+        Step6JavaTest(output_base=project_root / "apps" / "backend"),
+        Step7Integration(frontend_base=project_root / "apps" / "frontend" / "src" / "app" / "admin"),
         Step8Equivalence(mcp_server_path=settings.mcp_server_path),
         Step9Complete(),
     ]

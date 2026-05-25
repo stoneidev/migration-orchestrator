@@ -91,7 +91,7 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {pages.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} onClick={() => window.location.href = `/page-detail?id=${p.id}`} style={{ cursor: "pointer" }}>
                   <td className="td-mono"><strong>{p.id}</strong></td>
                   <td className="td-mono">{p.module}</td>
                   <td><span className={`complexity complexity-${p.complexity || "med"}`}>{(p.complexity || "MED").toUpperCase()}</span></td>

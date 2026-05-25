@@ -8,45 +8,41 @@ interface IDCardProps {
 
 export default function IDCard({ profile }: IDCardProps) {
   return (
-    <div className="relative w-48 mx-auto">
+    <div className="relative w-36 mx-auto">
       {/* Keychain ring at top */}
-      <div className="flex justify-center mb-2">
-        <div className="w-8 h-8 bg-gray-400 rounded-full border-4 border-gray-500 relative">
-          <div className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-6 h-3 bg-gray-500 rounded-t-lg"></div>
+      <div className="flex justify-center mb-1">
+        <div className="relative">
+          <div className="w-9 h-7 bg-gradient-to-b from-gray-300 to-gray-400 rounded-md shadow-md border border-gray-400"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-3 bg-gray-200 rounded-sm"></div>
         </div>
       </div>
 
-      {/* Keychain beads */}
-      <div className="flex justify-center gap-1 mb-3">
-        <div className="w-6 h-6 bg-pink-400 rounded-full shadow-md"></div>
-        <div className="w-6 h-6 bg-pink-300 rounded-full shadow-md"></div>
-        <div className="w-6 h-6 bg-pink-500 rounded-full shadow-md"></div>
-      </div>
-
-      {/* ID Card main body */}
-      <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-t-xl p-3 shadow-xl">
+      {/* Main card container with right side tag */}
+      <div className="relative">
         {/* White card content */}
-        <div className="bg-white rounded-lg p-3 shadow-inner relative">
-          {/* Logo circle with A */}
-          <div className="flex justify-center mb-2">
-            <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-md">
-              A
+        <div className="bg-white rounded-md p-3 shadow-2xl border border-gray-100">
+          {/* Logo circle with gradient background and white center with A */}
+          <div className="flex justify-center mb-3">
+            <div className="w-16 h-16 bg-gradient-to-br from-pink-400 via-pink-500 to-pink-600 rounded-full flex items-center justify-center shadow-md p-1">
+              <div className="w-full h-full bg-white rounded-full flex items-center justify-center">
+                <span className="text-2xl font-bold bg-gradient-to-br from-pink-400 to-pink-600 bg-clip-text text-transparent">A</span>
+              </div>
             </div>
           </div>
 
-          {/* Text info - very small font */}
-          <div className="text-[9px] leading-tight space-y-0.5 font-mono">
-            <div><span className="font-bold">NAME:</span> {profile.name}</div>
-            <div><span className="font-bold">COUNTRY:</span> {profile.country}</div>
-            <div><span className="font-bold">BIRTH DATE:</span> {profile.birthday}</div>
-            <div><span className="font-bold">ID NUMBER:</span> {profile.sns}</div>
+          {/* Text info */}
+          <div className="text-[8.5px] leading-tight space-y-0.5 text-black">
+            <div><span className="font-bold">NAME</span> : {profile.name}</div>
+            <div><span className="font-bold">COUNTRY</span> : {profile.country}</div>
+            <div><span className="font-bold">BIRTH DATE</span> : {profile.birthDate}</div>
+            <div><span className="font-bold">SKIN TYPE</span> : {profile.skinType}</div>
           </div>
         </div>
-      </div>
 
-      {/* Black AMBASSADOR tag at bottom */}
-      <div className="bg-black text-white text-center py-2 text-xs font-bold tracking-wider shadow-lg">
-        AMBASSADOR
+        {/* Vertical AMBASSADOR tag on right side */}
+        <div className="absolute -right-0.5 top-0 bottom-0 bg-black text-white text-[8px] font-bold px-1.5 flex items-center justify-center rounded-r-md" style={{ writingMode: 'vertical-rl', letterSpacing: '0.05em' }}>
+          AMBASSADOR
+        </div>
       </div>
     </div>
   );

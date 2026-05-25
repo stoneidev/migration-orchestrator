@@ -57,7 +57,23 @@ function PageDetailPage() {
   const pageId = searchParams.get("id") || "bbs.alert_close";
   const [detail, setDetail] = useState<PageDetail | null>(null);
   const [running, setRunning] = useState(false);
+  const [services, setServices] = useState<any>(null);
   const { events } = useWebSocket();
+
+  async function fetchServices() {
+    try {
+      const res = await fetch("http://localhost:8000/api/services/status");
+      const data = await res.json();
+      if (data.success) setServices(data.data);
+    } catch {}
+  }
+
+  async function toggleService(name: string) {
+    const svc = services?.[name];
+    const action = svc?.status === "running" ? "stop" : "start";
+    await fetch(`http://localhost:8000/api/services/${name}/${action}`, { method: "POST" });
+    setTimeout(fetchServices, 2000);
+  }
 
   async function fetchDetail() {
     try {
@@ -69,6 +85,7 @@ function PageDetailPage() {
 
   useEffect(() => {
     fetchDetail();
+    fetchServices();
   }, [pageId]);
 
   useEffect(() => {
@@ -146,6 +163,44 @@ function PageDetailPage() {
           <div className="info-item"><span className="k">Current Step:</span><span className="v">{detail?.current_step || 0}/9</span></div>
           <div className="info-item"><span className="k">Total Cost:</span><span className="v">${(detail?.total_cost || 0).toFixed(4)}</span></div>
         </div>
+
+        {/* Services Launch */}
+        {detail?.migration_status === "complete" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>Frontend (React)</span>
+                <span className={`status status-${services?.frontend?.status === "running" ? "running" : "queued"}`} style={{ marginLeft: "auto" }}>
+                  {services?.frontend?.status || "stopped"}
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 8 }}>
+                {services?.frontend?.status === "running"
+                  ? <a href={services.frontend.url + "/admin/" + pageId.replace(".", "/")} target="_blank" style={{ color: "var(--accent)" }}>{services.frontend.url}/admin/{pageId.replace(".", "/")}</a>
+                  : "Next.js dev server on port 3001"}
+              </div>
+              <button className={services?.frontend?.status === "running" ? "btn" : "btn btn-primary"} onClick={() => toggleService("frontend")} style={{ width: "100%", fontSize: 11 }}>
+                {services?.frontend?.status === "running" ? "Stop Frontend" : "Launch Frontend"}
+              </button>
+            </div>
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>Backend (Java)</span>
+                <span className={`status status-${services?.backend?.status === "running" ? "running" : "queued"}`} style={{ marginLeft: "auto" }}>
+                  {services?.backend?.status || "stopped"}
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 8 }}>
+                {services?.backend?.status === "running"
+                  ? <a href={services.backend.url} target="_blank" style={{ color: "var(--accent)" }}>{services.backend.url}</a>
+                  : "Spring Boot on port 8080"}
+              </div>
+              <button className={services?.backend?.status === "running" ? "btn" : "btn btn-primary"} onClick={() => toggleService("backend")} style={{ width: "100%", fontSize: 11 }}>
+                {services?.backend?.status === "running" ? "Stop Backend" : "Launch Backend"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Step details */}
         <div className="table-wrap">

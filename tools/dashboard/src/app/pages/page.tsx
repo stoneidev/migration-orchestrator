@@ -44,7 +44,7 @@ export default function PagesPage() {
             </thead>
             <tbody>
               {filtered.map((p: any) => (
-                <tr key={p.id}>
+                <tr key={p.id} onClick={() => window.location.href = `/page-detail?id=${p.id}`} style={{ cursor: "pointer" }}>
                   <td className="td-mono">{p.id}</td>
                   <td>{p.title || "—"}</td>
                   <td className="td-mono">{p.module}</td>
