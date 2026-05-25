@@ -28,5 +28,7 @@ def test_settings_defaults():
     assert settings.max_parallel_generation == 2
     assert settings.visual_ssim_threshold == 0.85
     assert settings.visual_diff_threshold_pct == 15.0
+    assert settings.strict_visual_gate is True
+    assert settings.strict_java_test is True
     assert settings.frontend_dev_port == 3100
     assert settings.screenshots_dir == Path("./screenshots")

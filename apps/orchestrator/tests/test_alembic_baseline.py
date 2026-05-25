@@ -19,6 +19,8 @@ REQUIRED_TABLES = {
     "reviews",
     "cost_log",
     "spec_gen_history",
+    "pipeline_tasks",
+    "spec_gen_sessions",
 }
 
 

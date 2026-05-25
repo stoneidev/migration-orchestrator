@@ -14,6 +14,18 @@ from src.pipeline.steps.step9_complete import complete_migration
 from src.workers.mcp import MCPWorker
 from src.config import Settings
 
+STEP_DEFINITIONS: list[tuple[int, str]] = [
+    (1, "spec_load"),
+    (2, "spec_verify"),
+    (3, "api_contract"),
+    (4, "react_generation"),
+    (5, "java_generation"),
+    (6, "java_test"),
+    (7, "integration"),
+    (8, "equivalence_check"),
+    (9, "complete"),
+]
+
 
 class Step1SpecLoad(BaseStep):
     name = "spec_load"
@@ -99,6 +111,7 @@ class Step4ReactGen(BaseStep):
         dev_startup_timeout_s: int = 30,
         ssim_threshold: float = 0.85,
         diff_threshold_pct: float = 15.0,
+        strict_visual_gate: bool = True,
     ):
         self.output_base = output_base
         self.frontend_dir = frontend_dir
@@ -107,6 +120,7 @@ class Step4ReactGen(BaseStep):
         self.dev_startup_timeout_s = dev_startup_timeout_s
         self.ssim_threshold = ssim_threshold
         self.diff_threshold_pct = diff_threshold_pct
+        self.strict_visual_gate = strict_visual_gate
 
     async def execute(self, context: StepContext) -> StepResult:
         if context.spec is None or context.api_contract is None:
@@ -129,6 +143,12 @@ class Step4ReactGen(BaseStep):
                 if c.exists():
                     screenshot_path = c
                     break
+
+        if self.strict_visual_gate and (screenshot_path is None or not screenshot_path.exists()):
+            return StepResult(
+                success=False,
+                error="Visual gate is strict but no baseline screenshot was found",
+            )
 
         result = await generate_react(
             spec=context.spec,
@@ -205,6 +225,19 @@ class Step4ReactGen(BaseStep):
                     "page_id": context.page_id,
                     "reason": str(e)[:100],
                 })
+                if self.strict_visual_gate:
+                    return StepResult(
+                        success=False,
+                        error=f"Visual verification error: {str(e)[:200]}",
+                        artifacts=visual_artifacts,
+                        model_used="sonnet",
+                        cost=result.cost,
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                        cache_creation_tokens=result.cache_creation_tokens,
+                        cache_read_tokens=result.cache_read_tokens,
+                        duration_ms=result.duration_ms,
+                    )
                 visual_artifacts["visual_check_error"] = str(e)[:200]
 
         else:
@@ -272,8 +305,9 @@ class Step6JavaTest(BaseStep):
     name = "java_test"
     step_number = 6
 
-    def __init__(self, output_base: Path):
+    def __init__(self, output_base: Path, *, strict_infra_failures: bool = True):
         self.output_base = output_base
+        self.strict_infra_failures = strict_infra_failures
 
     async def execute(self, context: StepContext) -> StepResult:
         if context.spec is None:
@@ -296,6 +330,13 @@ class Step6JavaTest(BaseStep):
         }
         if result.warning:
             artifacts["warning"] = result.warning
+            if self.strict_infra_failures:
+                return StepResult(
+                    success=False,
+                    artifacts=artifacts,
+                    error=f"Java test infrastructure failure: {result.warning}",
+                    duration_ms=result.duration_ms,
+                )
         if result.success:
             return StepResult(
                 success=True,
@@ -408,9 +449,13 @@ def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
             dev_startup_timeout_s=settings.frontend_dev_startup_timeout_s,
             ssim_threshold=settings.visual_ssim_threshold,
             diff_threshold_pct=settings.visual_diff_threshold_pct,
+            strict_visual_gate=settings.strict_visual_gate,
         ),
         Step5JavaGen(output_base=project_root / "apps" / "backend" / "src" / "main" / "java"),
-        Step6JavaTest(output_base=project_root / "apps" / "backend"),
+        Step6JavaTest(
+            output_base=project_root / "apps" / "backend",
+            strict_infra_failures=settings.strict_java_test,
+        ),
         Step7Integration(
             frontend_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
             backend_dir=project_root / "apps" / "backend",

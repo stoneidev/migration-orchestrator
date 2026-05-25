@@ -29,10 +29,15 @@ class Settings(BaseSettings):
     # diff would over-count.
     visual_ssim_threshold: float = 0.85
     visual_diff_threshold_pct: float = 15.0
+    # If True, visual verification errors/missing baselines fail the step.
+    strict_visual_gate: bool = True
 
     # Ports used during integration testing (Phase 4: stop hardcoding).
     frontend_dev_port: int = 3100   # next dev server for visual comparison
     frontend_dev_startup_timeout_s: int = 30
+    # If True, Java test infrastructure warnings (missing gradle/timeout)
+    # are treated as hard failures rather than pass-with-warning.
+    strict_java_test: bool = True
 
     project_budget: float = 20000.0
 

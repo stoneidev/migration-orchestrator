@@ -1,11 +1,10 @@
 """Step 8: check that every spec operation is implemented by a Java endpoint.
 
-We extract ``@*Mapping`` annotations from the generated ``.java`` files and
-match them against each ``spec.operations[*]`` entry. An operation is
-``covered`` when either its ``id`` appears in the Java code (file or method
-name) **or** its ``(http_method, route)`` pair has a matching annotation.
-Anything else is ``missing``. Extra Java endpoints with no matching spec
-operation are reported as ``extra`` for visibility.
+Parses Spring ``@*Mapping`` annotations from generated Java files and matches
+them against ``spec.operations``. This parser intentionally supports:
+- class-level ``@RequestMapping`` prefixes
+- method annotations with or without parentheses (``@GetMapping``)
+- ``path=`` / ``value=`` route arguments
 """
 
 from __future__ import annotations
@@ -15,11 +14,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-_MAPPING_RE = re.compile(
-    r"@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(([^)]*)\)",
+_METHOD_MAPPING_RE = re.compile(
+    r"@(Get|Post|Put|Delete|Patch|Request)Mapping(?:\s*\(([^)]*)\))?",
+    re.IGNORECASE | re.DOTALL,
+)
+_CLASS_REQUEST_MAPPING_RE = re.compile(
+    r"@RequestMapping(?:\s*\(([^)]*)\))?\s*(?:public\s+)?(?:final\s+)?class\s+\w+",
     re.IGNORECASE | re.DOTALL,
 )
 _PATH_LITERAL_RE = re.compile(r'"([^"]+)"')
+_NAMED_PATH_RE = re.compile(r"(?:path|value)\s*=\s*\"([^\"]+)\"", re.IGNORECASE)
 _METHOD_RE = re.compile(r"method\s*=\s*(?:RequestMethod\.)?(GET|POST|PUT|DELETE|PATCH)", re.IGNORECASE)
 _REQUEST_MAPPING_DEFAULT_METHOD = "GET"
 
@@ -61,13 +65,22 @@ def _resolve_java_path(file_ref: str, search_roots: list[Path]) -> Path | None:
 
 
 def _extract_endpoints_from_text(text: str, file_label: str) -> list[JavaEndpoint]:
-    endpoints: list[JavaEndpoint] = []
-    for match in _MAPPING_RE.finditer(text):
-        annotation = match.group(1).capitalize()
-        args = match.group(2)
+    class_prefix = ""
+    class_spans: list[tuple[int, int]] = []
+    for class_match in _CLASS_REQUEST_MAPPING_RE.finditer(text):
+        args = class_match.group(1) or ""
+        class_prefix = _extract_route_from_args(args)
+        class_spans.append((class_match.start(), class_match.end()))
 
-        path_match = _PATH_LITERAL_RE.search(args)
-        route = path_match.group(1) if path_match else ""
+    endpoints: list[JavaEndpoint] = []
+    for match in _METHOD_MAPPING_RE.finditer(text):
+        # Skip class-level @RequestMapping used to declare the controller base path.
+        if any(start <= match.start() < end for start, end in class_spans):
+            continue
+
+        annotation = match.group(1).capitalize()
+        args = match.group(2) or ""
+        route = _extract_route_from_args(args)
 
         if annotation == "Request":
             method_match = _METHOD_RE.search(args)
@@ -75,8 +88,22 @@ def _extract_endpoints_from_text(text: str, file_label: str) -> list[JavaEndpoin
         else:
             http_method = annotation.upper()
 
-        endpoints.append(JavaEndpoint(http_method=http_method, route=route, file=file_label))
+        full_route = _join_route(class_prefix, route)
+        endpoints.append(JavaEndpoint(http_method=http_method, route=full_route, file=file_label))
     return endpoints
+
+
+def _extract_route_from_args(args: str) -> str:
+    args = args.strip()
+    if not args:
+        return ""
+    named = _NAMED_PATH_RE.search(args)
+    if named:
+        return named.group(1)
+    first_literal = _PATH_LITERAL_RE.search(args)
+    if first_literal:
+        return first_literal.group(1)
+    return ""
 
 
 def _extract_endpoints(
@@ -104,6 +131,14 @@ def _normalise_route(route: str) -> str:
     if len(route) > 1 and route.endswith("/"):
         route = route.rstrip("/")
     return route
+
+
+def _join_route(prefix: str, child: str) -> str:
+    prefix_n = _normalise_route(prefix)
+    child_n = _normalise_route(child)
+    if prefix_n and child_n:
+        return _normalise_route(prefix_n.rstrip("/") + "/" + child_n.lstrip("/"))
+    return child_n or prefix_n
 
 
 async def check_equivalence(

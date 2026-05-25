@@ -1,30 +1,26 @@
-import asyncio
 import json
 import re
+import uuid
 from pathlib import Path
 
 from src.util.clock import utcnow
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 import logging
 
 from src.workers.mcp import MCPWorker
-from src.workers.analysis import AnalysisWorker
 from src.workers.playwright import PlaywrightWorker
 from src.api.ws.events import event_bus
 from src.api.validators import validate_page_id
 from src.config import Settings
 from src.db.deps import get_session_factory
-from src.db.models import SpecGenHistory
+from src.db.models import Page, SpecGenHistory, SpecGenSession
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_spec_gen_status: dict[str, dict] = {}
-
 
 class SpecGenRequest(BaseModel):
     url: str
@@ -36,22 +32,41 @@ class SpecGenStepRequest(BaseModel):
     session_id: str
 
 
-# ---- Session State ----
+def _decode_json(data: str | None):
+    if not data:
+        return None
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        return None
 
-def _get_session(session_id: str) -> dict:
-    if session_id not in _spec_gen_status:
-        _spec_gen_status[session_id] = {
-            "status": "idle",
-            "url": "",
-            "php_path": "",
-            "page_id": "",
-            "step": 0,
-            "screenshot": None,
-            "mcp_data": None,
-            "spec": None,
-            "error": None,
-        }
-    return _spec_gen_status[session_id]
+
+def _session_row_to_dict(row: SpecGenSession) -> dict:
+    return {
+        "session_id": row.id,
+        "status": row.status,
+        "url": row.url,
+        "php_path": row.php_path,
+        "page_id": row.page_id,
+        "step": row.step,
+        "screenshot": _decode_json(row.screenshot_json),
+        "mcp_data": _decode_json(row.mcp_data_json),
+        "spec": _decode_json(row.spec_json),
+        "error": row.error,
+        "cost": row.cost,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _load_session_or_404(session_id: str) -> SpecGenSession:
+    factory = get_session_factory()
+    with factory() as db:
+        row = db.get(SpecGenSession, session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"success": False, "error": {"code": "SESSION-001", "message": "SpecGen session not found"}})
+        db.expunge(row)
+        return row
 
 
 # ---- API Endpoints ----
@@ -87,25 +102,41 @@ def _extract_from_url(url: str) -> tuple[str, str]:
 
 @router.post("/spec-gen/start")
 async def start_spec_gen(request: SpecGenRequest):
-    session_id = f"sg-{utcnow().strftime('%H%M%S')}"
-    session = _get_session(session_id)
-    session["url"] = request.url
+    session_id = f"sg-{uuid.uuid4().hex[:12]}"
 
     # Auto-extract php_path and page_id from URL
     auto_php_path, auto_page_id = _extract_from_url(request.url)
-    session["php_path"] = request.php_path or auto_php_path
+    php_path = request.php_path or auto_php_path
     page_id = request.page_id or auto_page_id
-    # Defensive: page_id is concatenated into filesystem paths downstream.
-    session["page_id"] = validate_page_id(page_id)
-    session["status"] = "ready"
-    return {"success": True, "data": {"session_id": session_id, **session}}
+    safe_page_id = validate_page_id(page_id)
+
+    factory = get_session_factory()
+    with factory() as db:
+        row = SpecGenSession(
+            id=session_id,
+            url=request.url,
+            php_path=php_path,
+            page_id=safe_page_id,
+            status="ready",
+            step=0,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return {"success": True, "data": _session_row_to_dict(row)}
 
 
 @router.post("/spec-gen/step1-capture")
 async def step1_capture(request: SpecGenStepRequest, background_tasks: BackgroundTasks):
-    session = _get_session(request.session_id)
-    session["step"] = 1
-    session["status"] = "capturing"
+    factory = get_session_factory()
+    with factory() as db:
+        row = db.get(SpecGenSession, request.session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"success": False, "error": {"code": "SESSION-001", "message": "SpecGen session not found"}})
+        row.step = 1
+        row.status = "capturing"
+        row.error = None
+        db.commit()
     event_bus.emit("spec_gen:step_started", {"session_id": request.session_id, "step": 1, "name": "Playwright Capture"})
     background_tasks.add_task(_do_capture, request.session_id)
     return {"success": True, "data": {"message": "Capturing page...", "step": 1}}
@@ -113,9 +144,15 @@ async def step1_capture(request: SpecGenStepRequest, background_tasks: Backgroun
 
 @router.post("/spec-gen/step2-analyze")
 async def step2_analyze(request: SpecGenStepRequest, background_tasks: BackgroundTasks):
-    session = _get_session(request.session_id)
-    session["step"] = 2
-    session["status"] = "analyzing"
+    factory = get_session_factory()
+    with factory() as db:
+        row = db.get(SpecGenSession, request.session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"success": False, "error": {"code": "SESSION-001", "message": "SpecGen session not found"}})
+        row.step = 2
+        row.status = "analyzing"
+        row.error = None
+        db.commit()
     event_bus.emit("spec_gen:step_started", {"session_id": request.session_id, "step": 2, "name": "MCP Analysis"})
     background_tasks.add_task(_do_mcp_analysis, request.session_id)
     return {"success": True, "data": {"message": "Analyzing PHP source...", "step": 2}}
@@ -123,9 +160,15 @@ async def step2_analyze(request: SpecGenStepRequest, background_tasks: Backgroun
 
 @router.post("/spec-gen/step3-generate")
 async def step3_generate(request: SpecGenStepRequest, background_tasks: BackgroundTasks):
-    session = _get_session(request.session_id)
-    session["step"] = 3
-    session["status"] = "generating"
+    factory = get_session_factory()
+    with factory() as db:
+        row = db.get(SpecGenSession, request.session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"success": False, "error": {"code": "SESSION-001", "message": "SpecGen session not found"}})
+        row.step = 3
+        row.status = "generating"
+        row.error = None
+        db.commit()
     event_bus.emit("spec_gen:step_started", {"session_id": request.session_id, "step": 3, "name": "Spec Generation"})
     background_tasks.add_task(_do_spec_generation, request.session_id)
     return {"success": True, "data": {"message": "Generating spec...", "step": 3}}
@@ -158,8 +201,8 @@ async def get_history():
 
 @router.get("/spec-gen/{session_id}")
 async def get_session_status(session_id: str):
-    session = _get_session(session_id)
-    return {"success": True, "data": session}
+    row = _load_session_or_404(session_id)
+    return {"success": True, "data": _session_row_to_dict(row)}
 
 
 def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
@@ -185,7 +228,6 @@ def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
             db.add(record)
 
             # 2. Register in pages table (for pipeline)
-            from src.db.models import Page
             existing = db.get(Page, page_id)
             if not existing:
                 db.add(Page(
@@ -201,7 +243,6 @@ def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
             db.commit()
 
         # 3. Copy spec to specs directory (for pipeline Step 1)
-        import shutil
         specs_dir = settings.specs_dir
         target = specs_dir / f"{page_id}.aispec.json"
         # Ensure spec has meta.id
@@ -221,8 +262,15 @@ def _save_history(session_id: str, session: dict, spec: dict, spec_path: str):
 # ---- Background Tasks ----
 
 async def _do_capture(session_id: str):
-    session = _get_session(session_id)
     settings = Settings()
+    factory = get_session_factory()
+
+    with factory() as db:
+        row = db.get(SpecGenSession, session_id)
+        if row is None:
+            return
+        target_url = row.url
+        page_id = row.page_id
 
     event_bus.emit("spec_gen:log", {"session_id": session_id, "message": "Launching Playwright (headless)..."})
 
@@ -233,40 +281,54 @@ async def _do_capture(session_id: str):
         screenshots_dir=Path(settings.screenshots_dir),
     )
 
-    event_bus.emit("spec_gen:log", {"session_id": session_id, "message": f"Navigating to {session['url']}..."})
+    event_bus.emit("spec_gen:log", {"session_id": session_id, "message": f"Navigating to {target_url}..."})
     capture = await worker.capture_for_spec(
-        target_url=session["url"],
-        page_id=session["page_id"],
+        target_url=target_url,
+        page_id=page_id,
     )
 
     if not capture.success:
-        session["status"] = "error"
-        session["error"] = capture.error
+        with factory() as db:
+            row = db.get(SpecGenSession, session_id)
+            if row:
+                row.status = "error"
+                row.error = capture.error
+                db.commit()
         log.warning("spec-gen capture failed for %s: %s", session_id, capture.error)
         event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 1, "error": capture.error[:200]})
         return
 
-    session["screenshot"] = {
+    screenshot_data = {
         "path": capture.screenshot_path,
         "url": capture.url,
         "title": capture.title,
         "headings": capture.headings,
         "buttons": capture.buttons,
     }
-    session["status"] = "captured"
+    with factory() as db:
+        row = db.get(SpecGenSession, session_id)
+        if row:
+            row.screenshot_json = json.dumps(screenshot_data, ensure_ascii=False)
+            row.status = "captured"
+            row.error = None
+            db.commit()
     event_bus.emit("spec_gen:step_completed", {"session_id": session_id, "step": 1, "status": "success"})
 
 
 async def _do_mcp_analysis(session_id: str):
-    session = _get_session(session_id)
     settings = Settings()
+    factory = get_session_factory()
+
+    with factory() as db:
+        row = db.get(SpecGenSession, session_id)
+        if row is None:
+            return
+        php_path = row.php_path
 
     try:
         event_bus.emit("spec_gen:log", {"session_id": session_id, "message": "Connecting to php-analyzer MCP..."})
         worker = MCPWorker(mcp_server_path=settings.mcp_server_path)
         async with worker.connect():
-            php_path = session["php_path"]
-
             event_bus.emit("spec_gen:log", {"session_id": session_id, "message": f"Analyzing {php_path}..."})
             file_detail = await worker.call_tool("php_get_file_detail", {"file_path": php_path})
             trace = await worker.call_tool("php_trace_entry", {
@@ -275,7 +337,7 @@ async def _do_mcp_analysis(session_id: str):
                 "include_sql": True,
             })
 
-            session["mcp_data"] = {
+            mcp_data = {
                 "file_detail": file_detail if isinstance(file_detail, dict) else {"raw": str(file_detail)[:500]},
                 "trace": {
                     "include_count": trace.get("include_count", 0) if isinstance(trace, dict) else 0,
@@ -285,21 +347,35 @@ async def _do_mcp_analysis(session_id: str):
                     "execution_flow": trace.get("execution_flow", [])[:10] if isinstance(trace, dict) else [],
                 },
             }
-            session["status"] = "analyzed"
+            with factory() as db:
+                row = db.get(SpecGenSession, session_id)
+                if row:
+                    row.mcp_data_json = json.dumps(mcp_data, ensure_ascii=False)
+                    row.status = "analyzed"
+                    row.error = None
+                    db.commit()
 
         event_bus.emit("spec_gen:step_completed", {"session_id": session_id, "step": 2, "status": "success"})
 
     except Exception as e:
-        session["status"] = "error"
-        session["error"] = str(e)
+        with factory() as db:
+            row = db.get(SpecGenSession, session_id)
+            if row:
+                row.status = "error"
+                row.error = str(e)
+                db.commit()
         event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 2, "error": str(e)[:200]})
 
 
 async def _do_spec_generation(session_id: str):
-    session = _get_session(session_id)
-
     try:
         from src.workers.claude_cli import ClaudeCLIWorker
+        factory = get_session_factory()
+        with factory() as db:
+            row = db.get(SpecGenSession, session_id)
+            if row is None:
+                return
+            session = _session_row_to_dict(row)
 
         mcp = session.get("mcp_data", {})
         screenshot = session.get("screenshot", {})
@@ -371,9 +447,14 @@ Be thorough and specific based on the PHP analysis data. All business rules shou
 
         if result.success and output_file.exists():
             spec = json.loads(output_file.read_text())
-            session["spec"] = spec
-            session["status"] = "complete"
-            session["cost"] = result.cost
+            with factory() as db:
+                row = db.get(SpecGenSession, session_id)
+                if row:
+                    row.spec_json = json.dumps(spec, ensure_ascii=False)
+                    row.status = "complete"
+                    row.cost = result.cost
+                    row.error = None
+                    db.commit()
 
             # Save to DB
             _save_history(session_id, session, spec, str(output_file))
@@ -391,20 +472,40 @@ Be thorough and specific based on the PHP analysis data. All business rules shou
             json_files = list(out_dir.glob("*.json"))
             if json_files:
                 spec = json.loads(json_files[0].read_text())
-                session["spec"] = spec
-                session["status"] = "complete"
-                session["cost"] = result.cost
+                with factory() as db:
+                    row = db.get(SpecGenSession, session_id)
+                    if row:
+                        row.spec_json = json.dumps(spec, ensure_ascii=False)
+                        row.status = "complete"
+                        row.cost = result.cost
+                        row.error = None
+                        db.commit()
+                _save_history(session_id, session, spec, str(json_files[0]))
                 event_bus.emit("spec_gen:step_completed", {"session_id": session_id, "step": 3, "status": "success"})
             else:
-                session["status"] = "error"
-                session["error"] = f"CLI succeeded but no JSON file generated. Output: {result.output[:300]}"
-                event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 3, "error": session["error"][:200]})
+                error_msg = f"CLI succeeded but no JSON file generated. Output: {result.output[:300]}"
+                with factory() as db:
+                    row = db.get(SpecGenSession, session_id)
+                    if row:
+                        row.status = "error"
+                        row.error = error_msg
+                        db.commit()
+                event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 3, "error": error_msg[:200]})
         else:
-            session["status"] = "error"
-            session["error"] = result.error[:500]
+            with factory() as db:
+                row = db.get(SpecGenSession, session_id)
+                if row:
+                    row.status = "error"
+                    row.error = result.error[:500]
+                    db.commit()
             event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 3, "error": result.error[:200]})
 
     except Exception as e:
-        session["status"] = "error"
-        session["error"] = str(e)
+        factory = get_session_factory()
+        with factory() as db:
+            row = db.get(SpecGenSession, session_id)
+            if row:
+                row.status = "error"
+                row.error = str(e)
+                db.commit()
         event_bus.emit("spec_gen:step_failed", {"session_id": session_id, "step": 3, "error": str(e)[:200]})

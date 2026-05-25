@@ -27,6 +27,9 @@ _SessionFactory: Optional[sessionmaker] = None
 
 
 _ALEMBIC_INI = Path(__file__).resolve().parent.parent.parent / "alembic.ini"
+_BASELINE_REVISION = "cb0a1fb6f34a"
+_BASELINE_TABLES = {"pages", "step_executions", "artifacts", "reviews", "cost_log", "spec_gen_history"}
+_RUNTIME_STATE_TABLES = {"pipeline_tasks", "spec_gen_sessions"}
 
 
 def _is_on_disk_sqlite(url: str) -> bool:
@@ -58,15 +61,16 @@ def _run_alembic_for(url: str) -> None:
     finally:
         probe_engine.dispose()
 
-    expected_baseline = {"pages", "step_executions", "artifacts", "reviews", "cost_log", "spec_gen_history"}
     has_alembic_version = "alembic_version" in existing
 
-    if not has_alembic_version and expected_baseline.issubset(existing):
-        # Existing dev DB matches the baseline schema — stamp it so the
-        # next ``alembic upgrade`` is a no-op.
-        command.stamp(cfg, "head")
-    else:
-        command.upgrade(cfg, "head")
+    if not has_alembic_version and _BASELINE_TABLES.issubset(existing):
+        # Existing dev DB from pre-alembic days: mark it at the known baseline
+        # revision first, then run normal upgrades so new revisions still apply.
+        if _RUNTIME_STATE_TABLES.issubset(existing):
+            command.stamp(cfg, "head")
+            return
+        command.stamp(cfg, _BASELINE_REVISION)
+    command.upgrade(cfg, "head")
 
 
 def configure_db(

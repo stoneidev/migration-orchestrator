@@ -24,15 +24,30 @@ public class ProductController {
 }
 """
 
+NO_PAREN_SOURCE = """
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/demo")
+public class DemoController {
+    @GetMapping
+    public Object list() { return null; }
+}
+"""
+
 
 def test_extract_endpoints_from_text_parses_all_annotations():
     endpoints = _extract_endpoints_from_text(CONTROLLER_SOURCE, file_label="ProductController.java")
     methods = sorted((e.http_method, e.route) for e in endpoints)
-    assert ("GET", "/list") in methods
-    assert ("POST", "/create") in methods
-    assert ("PUT", "/legacy") in methods
-    # RequestMapping at class level too:
-    assert any(e.route == "/api/v1/shop/products" for e in endpoints)
+    assert ("GET", "/api/v1/shop/products/list") in methods
+    assert ("POST", "/api/v1/shop/products/create") in methods
+    assert ("PUT", "/api/v1/shop/products/legacy") in methods
+
+
+def test_extract_endpoints_supports_annotation_without_parentheses():
+    endpoints = _extract_endpoints_from_text(NO_PAREN_SOURCE, file_label="DemoController.java")
+    methods = {(e.http_method, e.route) for e in endpoints}
+    assert ("GET", "/api/v1/demo") in methods
 
 
 @pytest.mark.asyncio
@@ -42,8 +57,8 @@ async def test_check_equivalence_returns_success_when_all_ops_covered(tmp_path):
 
     spec = {
         "operations": [
-            {"id": "list_products", "http_method": "GET", "route": "/list"},
-            {"id": "create_product", "http_method": "POST", "route": "/create"},
+            {"id": "list_products", "http_method": "GET", "route": "/api/v1/shop/products/list"},
+            {"id": "create_product", "http_method": "POST", "route": "/api/v1/shop/products/create"},
         ],
     }
 
@@ -65,8 +80,8 @@ async def test_check_equivalence_reports_missing(tmp_path):
 
     spec = {
         "operations": [
-            {"id": "list_products", "http_method": "GET", "route": "/list"},
-            {"id": "delete_product", "http_method": "DELETE", "route": "/delete"},
+            {"id": "list_products", "http_method": "GET", "route": "/api/v1/shop/products/list"},
+            {"id": "delete_product", "http_method": "DELETE", "route": "/api/v1/shop/products/delete"},
         ],
     }
 

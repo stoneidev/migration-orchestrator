@@ -19,14 +19,14 @@ from src.logging_setup import configure_logging
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
-    logging.getLogger(__name__).info("orchestrator starting up")
+    log = logging.getLogger(__name__)
+    log.info("orchestrator starting up")
     event_bus.set_loop(asyncio.get_running_loop())
-    try:
-        from src.config import Settings
-        settings = Settings()
-        configure_db(settings.database_url)
-    except Exception:
-        configure_db("sqlite:///./data/orchestrator.db")
+    from src.config import Settings
+    settings = Settings()
+    # Consistency-first mode: fail fast on invalid settings or DB migration
+    # errors rather than silently writing to an unexpected fallback DB.
+    configure_db(settings.database_url)
     try:
         yield
     finally:

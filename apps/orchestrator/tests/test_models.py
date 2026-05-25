@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from src.db.models import Page, StepExecution, Artifact, CostLog, Review
+from src.db.models import (
+    Artifact,
+    CostLog,
+    Page,
+    PipelineTask,
+    Review,
+    SpecGenSession,
+    StepExecution,
+)
 
 
 def test_create_page(db_session):
@@ -123,3 +131,37 @@ def test_review(db_session):
     assert len(loaded.reviews) == 1
     assert loaded.reviews[0].status == "pending"
     assert loaded.reviews[0].review_type == "blocking"
+
+
+def test_pipeline_task_persistence(db_session):
+    task = PipelineTask(
+        id="run-abc123",
+        task_type="pipeline_run",
+        page_id="bbs.alert_close",
+        status="queued",
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    loaded = db_session.get(PipelineTask, "run-abc123")
+    assert loaded is not None
+    assert loaded.task_type == "pipeline_run"
+    assert loaded.status == "queued"
+
+
+def test_spec_gen_session_persistence(db_session):
+    session = SpecGenSession(
+        id="sg-abc123",
+        url="https://example.com/shop/mp_question.php",
+        php_path="shop/mp_question.php",
+        page_id="shop.mp_question",
+        status="ready",
+        step=0,
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    loaded = db_session.get(SpecGenSession, "sg-abc123")
+    assert loaded is not None
+    assert loaded.page_id == "shop.mp_question"
+    assert loaded.status == "ready"

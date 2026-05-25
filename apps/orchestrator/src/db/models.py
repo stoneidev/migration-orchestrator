@@ -108,6 +108,37 @@ class SpecGenHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
 
 
+class SpecGenSession(Base):
+    __tablename__ = "spec_gen_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    php_path: Mapped[str] = mapped_column(String, nullable=False, default="")
+    page_id: Mapped[str] = mapped_column(String, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String, nullable=False, default="idle")
+    step: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    screenshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mcp_data_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    spec_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+
+
+class PipelineTask(Base):
+    __tablename__ = "pipeline_tasks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    task_type: Mapped[str] = mapped_column(String, nullable=False)
+    page_id: Mapped[str] = mapped_column(String, nullable=False)
+    step_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+
+
 class CostLog(Base):
     __tablename__ = "cost_log"
 
