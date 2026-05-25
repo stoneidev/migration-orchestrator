@@ -769,6 +769,10 @@
     }
 
     /* Rich layout: text + visual */
+    .slide-rich {
+      justify-content: flex-start;
+      overflow-y: auto;
+    }
     .slide-rich h2 { margin-bottom: 12px; }
     .slide-rich .slide-lead {
       font-size: 15px;
@@ -818,10 +822,10 @@
       overflow: hidden;
     }
     .agenda-bar span { height: 100%; }
-    .agenda-bar .seg1 { flex: 5; background: var(--accent); opacity: 0.85; }
-    .agenda-bar .seg2 { flex: 15; background: var(--accent); opacity: 0.55; }
-    .agenda-bar .seg3 { flex: 12; background: var(--olive); opacity: 0.7; }
-    .agenda-bar .seg4 { flex: 8; background: var(--olive); opacity: 0.45; }
+    .agenda-bar .seg1 { flex: 6; background: var(--accent); opacity: 0.85; }
+    .agenda-bar .seg2 { flex: 17; background: var(--accent); opacity: 0.55; }
+    .agenda-bar .seg3 { flex: 14; background: var(--olive); opacity: 0.7; }
+    .agenda-bar .seg4 { flex: 9; background: var(--olive); opacity: 0.45; }
     .agenda-outcomes {
       list-style: none;
       padding: 0;
@@ -1012,13 +1016,13 @@
       display: flex;
       align-items: stretch;
       gap: 6px;
-      flex-wrap: nowrap;
-      overflow-x: auto;
+      flex-wrap: wrap;
+      row-gap: 10px;
       padding: 4px 0;
     }
     .lineage-flow .lf-node {
-      flex: 1 1 0;
-      min-width: 80px;
+      flex: 1 1 90px;
+      min-width: 90px;
       border: 1px solid var(--rule-strong);
       background: rgba(255, 255, 255, 0.6);
       padding: 10px 8px;
@@ -1252,6 +1256,66 @@
       line-height: 1.45;
     }
 
+    /* Harness loop diagram (vertical with branch) */
+    .harness-loop {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+    .harness-loop > .illus-caption { margin-bottom: 4px; }
+    .harness-loop .hl-node {
+      border: 1px solid var(--rule-strong);
+      padding: 10px 14px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.35;
+      background: rgba(255,255,255,0.55);
+    }
+    .harness-loop .hl-node strong { display: block; font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+    .harness-loop .hl-node small { display: block; font-size: 10px; color: var(--ink-faint); font-family: var(--mono); letter-spacing: 0.02em; }
+    .harness-loop .hl-input { border-color: var(--accent); background: rgba(194,78,58,0.08); }
+    .harness-loop .hl-gate { border-color: var(--olive); background: rgba(90,107,71,0.08); }
+    .harness-loop .hl-next { border-color: var(--olive); background: rgba(90,107,71,0.14); }
+    .harness-loop .hl-retry { border-color: var(--accent); background: rgba(194,78,58,0.12); }
+    .harness-loop .hl-arrow {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .harness-loop .hl-branch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .harness-loop .hl-branch-col {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+    }
+    .harness-loop .hl-label {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      padding: 2px 0;
+    }
+    .harness-loop .hl-pass { color: var(--olive); }
+    .harness-loop .hl-fail { color: var(--accent); }
+    .harness-loop .hl-feedback {
+      margin-top: 6px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--ink-faint);
+      font-family: var(--mono);
+      padding: 6px 0 0;
+      border-top: 1px dashed var(--rule);
+    }
+
     /* Sandwich diagram (top-mid-bottom) */
     .sandwich {
       display: grid;
@@ -1432,13 +1496,13 @@
 <div class="deck" id="deck">
 
   <!-- SLIDE 1: Title -->
-  <section class="slide slide-cover has-context active" data-note="0:00 — 인사, 발표 목적: 이론적 기반 + 실제 적용 + 기대 효과">
+  <section class="slide slide-cover has-context active" data-note="0:00 / 1m — 인사 · 발표 목적: 이론 → 적용 → 효과 흐름 안내">
     <div class="cover-top meta">StyleKorean Admin Migration</div>
     <div class="cover-layout">
     <div class="cover-body">
       <h1>Silicon2 Migration<br>Orchestrator</h1>
       <p class="subtitle">Spec-driven · Harness-enforced · AI-DLC-aligned<br>레거시 707 pages, one verified bolt at a time</p>
-      <p class="cover-foot">이론 → 적용 → 효과 · 40분</p>
+      <p class="cover-foot">이론 → 적용 → 효과 · 45분 + Q&amp;A</p>
     </div>
     <dl class="cover-context">
       <dt>대상</dt><dd>StyleKorean PHP Admin 1,099 pages</dd>
@@ -1450,30 +1514,30 @@
   </section>
 
   <!-- SLIDE 2: Agenda -->
-  <section class="slide slide-agenda" data-note="1:00 — 오늘 흐름 소개">
+  <section class="slide slide-agenda" data-note="1:00 / 1m — 4 부 흐름 · 산출물 · 45분 발표">
     <h2>발표 구성</h2>
     <div class="agenda-bar" aria-hidden="true"><span class="seg1"></span><span class="seg2"></span><span class="seg3"></span><span class="seg4"></span></div>
     <div class="agenda-wrap">
     <ul class="agenda-timeline">
       <li>
-        <span class="time">5분</span>
+        <span class="time">6분</span>
         <span class="label">문제 정의</span>
-        <span class="desc">— 왜 지금, 왜 AI, 왜 이 방식인가</span>
+        <span class="desc">— 왜 지금, 왜 AI, 왜 이 방식인가 · 기술 부채 컨텍스트</span>
       </li>
       <li>
-        <span class="time">15분</span>
+        <span class="time">17분</span>
         <span class="label">이론적 기반</span>
-        <span class="desc">— SDLC · AWS AI-DLC · Harness Engineering</span>
+        <span class="desc">— SDLC · AWS AI-DLC · Harness Engineering · 어휘 전환 · Before/After</span>
       </li>
       <li>
-        <span class="time">12분</span>
+        <span class="time">14분</span>
         <span class="label">적용</span>
-        <span class="desc">— Orchestrator 아키텍처 · 9-Step Pipeline · Workers</span>
+        <span class="desc">— Hub-Spoke · 9-Step 상세 · Workers · 기술 스택 · PoC · Dashboard · Demo</span>
       </li>
       <li>
-        <span class="time">8분</span>
+        <span class="time">9분</span>
         <span class="label">효과</span>
-        <span class="desc">— ROI · 품질 · 로드맵 · Q&amp;A</span>
+        <span class="desc">— ROI · 시나리오 3종 · 품질 · 로드맵 · 리스크 · Q&amp;A</span>
       </li>
     </ul>
     <ul class="agenda-outcomes">
@@ -1486,14 +1550,14 @@
   </section>
 
   <!-- SLIDE 3: Part 1 Section -->
-  <section class="slide slide-section" data-note="2:00 — Part 1 시작">
+  <section class="slide slide-section" data-note="2:00 / 0.5m — Part 1 시작: 문제 정의 6분">
     <span class="section-watermark" aria-hidden="true">01</span>
     <h2>문제 정의</h2>
-    <p class="section-time">약 5분</p>
+    <p class="section-time">약 6분</p>
   </section>
 
   <!-- SLIDE 4: Scale stats -->
-  <section class="slide slide-stat-hero" data-note="2:30 — 규모 강조: 42 person-years">
+  <section class="slide slide-stat-hero" data-note="2:30 / 0.5m — 규모 강조: 42 person-years는 단순 산술. 청중 충격 후 다음 슬라이드로">
     <h2>1,099 pages — 조직적으로 불가능한 규모</h2>
     <div class="stat-hero">
       <div class="number">42<span class="unit">yr</span></div>
@@ -1508,7 +1572,7 @@
   </section>
 
   <!-- SLIDE 5: 4 migration failures -->
-  <section class="slide slide-rich" data-note="3:30 — 4가지 pain point: 네 가지가 동시에 작동해 프로젝트가 멈춘다">
+  <section class="slide slide-rich" data-note="3:00 / 1m — 4가지 pain point: 곱셈으로 작동 → 청중에게 '왜 곱셈인지' 강조">
     <h2>수동 마이그레이션의 4대 실패</h2>
     <p class="slide-lead">단일 page는 수동으로도 가능하다. 그러나 <strong>1,099 page × 4가지 실패 요인</strong>은 곱셈으로 작동해 6개월 안에 프로젝트를 정지시킨다.</p>
     <div class="quadrant-grid" style="margin-top:8px">
@@ -1540,7 +1604,7 @@
   </section>
 
   <!-- SLIDE 5b (NEW): Tech debt context -->
-  <section class="slide slide-rich" data-note="4:00 — 왜 지금인가: 12년 누적 기술 부채를 구체화">
+  <section class="slide slide-rich" data-note="4:00 / 1m — 왜 지금: 운영 시스템에서 누적 부채가 신규 기능을 막는 임계점">
     <h2>StyleKorean Admin — 12년 누적 기술 부채</h2>
     <p class="slide-lead">"왜 지금 마이그레이션인가"의 답은 단순히 "PHP라서"가 아니다. <strong>운영 중인 시스템</strong>에서 누적된 구조적 부채가 신규 기능 출시를 가로막는 임계점을 넘었다.</p>
     <dl class="debt-grid">
@@ -1573,7 +1637,7 @@
   </section>
 
   <!-- SLIDE 6: AI-assisted vs AI-autonomous -->
-  <section class="slide slide-rich" data-note="4:30 — AI 두 가지 접근의 한계: 두 접근 모두 harness 없이는 실패한다">
+  <section class="slide slide-rich" data-note="5:00 / 1m — AI 두 접근 모두 한계 → '결손을 메우는 4가지'로 자연 transition">
     <h2>AI 코딩 ≠ AI 엔지니어링</h2>
     <p class="slide-lead">시장에는 두 가지 흔한 접근이 있다. 둘 다 <strong>마이그레이션 규모에서는 실패</strong>한다. 이유는 같다 — 검증과 인간 개입을 설계하지 않았다.</p>
 
@@ -1607,7 +1671,7 @@
   </section>
 
   <!-- SLIDE 7: Existing assets -->
-  <section class="slide slide-rich" data-note="5:30 — 기존 자산 = 차별점">
+  <section class="slide slide-rich" data-note="6:00 / 1m — 707 aispec이 이미 확보 = Greenfield AI-DLC와 결정적 차이점">
     <h2>이미 확보된 Harness 산출물</h2>
     <div class="slide-duo">
       <div>
@@ -1641,14 +1705,14 @@
   </section>
 
   <!-- SLIDE 8: Part 2 Section -->
-  <section class="slide slide-section" data-note="6:00 — Part 2 이론 시작">
+  <section class="slide slide-section" data-note="7:00 / 0.5m — Part 2 이론 시작: SDLC + AI-DLC + Harness 17분">
     <span class="section-watermark" aria-hidden="true">02</span>
     <h2>이론적 기반</h2>
-    <p class="section-time">SDLC · AWS AI-DLC · Harness Engineering · 약 15분</p>
+    <p class="section-time">SDLC · AWS AI-DLC · Harness Engineering · 약 17분</p>
   </section>
 
   <!-- SLIDE 9: Three framework convergence -->
-  <section class="slide slide-convergence" data-note="6:30 — 3층 구조: 질문은 다르지만(What/How/Trust) 같은 4원칙으로 수렴 → Orchestrator가 실행 계층">
+  <section class="slide slide-convergence" data-note="7:30 / 2m — 핵심 슬라이드: 3 프레임워크가 같은 4원칙으로 수렴 → Silicon2가 실행 계층">
     <h2>세 프레임워크의 수렴</h2>
     <p class="convergence-lead">SDLC · AI-DLC · Harness Engineering은 출발점과 어휘가 다르지만, <strong>독립적으로 동일한 설계 원칙</strong>에 도달한다.</p>
 
@@ -1756,7 +1820,7 @@
   </section>
 
   <!-- SLIDE 10: SDLC Greenfield vs Migration -->
-  <section class="slide slide-rich" data-note="7:30 — Greenfield vs Migration SDLC: success criteria 자체가 다르다">
+  <section class="slide slide-rich" data-note="9:30 / 1m — Migration은 'equivalence' 문제, Greenfield의 'correctness'와 본질 다름">
     <h2>SDLC — Migration은 다른 문제다</h2>
     <p class="slide-lead">SDLC 교과서는 <strong>Greenfield</strong>를 가정한다. Migration은 4가지 축에서 본질이 다르며, 가장 중요한 차이는 성공의 정의가 "correctness"가 아니라 "<strong>equivalence</strong>"라는 점.</p>
     <table style="margin-top:8px;font-size:14px">
@@ -1777,7 +1841,7 @@
   </section>
 
   <!-- SLIDE 11: Requirements-as-Code -->
-  <section class="slide slide-rich" data-note="8:30 — Requirements-as-Code">
+  <section class="slide slide-rich" data-note="10:30 / 1m — Spec-as-Source: 707 aispec이 PRD 역할. LLM은 구현만">
     <h2>Requirements-as-Code</h2>
     <div class="slide-duo">
       <div class="content-body">
@@ -1808,7 +1872,7 @@
   </section>
 
   <!-- SLIDE 12: SDLC to Step mapping -->
-  <section class="slide slide-rich" data-note="9:30 — SDLC mapping table">
+  <section class="slide slide-rich" data-note="11:30 / 1m — SDLC phase → 9-step 매핑. 'Reverse Engineering'이 Greenfield에 없는 단계임을 강조">
     <h2>SDLC Phase → Orchestrator Step</h2>
     <div class="step-map" aria-label="9단계 매핑">
       <div class="sm"><strong>1</strong>Spec</div>
@@ -1836,7 +1900,7 @@
   </section>
 
   <!-- SLIDE 13: AWS AI-DLC definition quote -->
-  <section class="slide slide-statement" data-note="10:30 — AWS AI-DLC 정의: AI가 중심, 사람은 판단점에만">
+  <section class="slide slide-statement" data-note="12:30 / 1m — AWS 정의 인용. '인용 한 줄' 강조용 슬라이드 — 30초 정도만 머무름">
     <h2>AWS AI-DLC (2025)</h2>
     <blockquote class="statement">
       AI를 중심 실행 주체로 두되,<br>판단이 필요한 지점에서만 인간에게 위임
@@ -1857,7 +1921,7 @@
   </section>
 
   <!-- SLIDE 14: AI-DLC 3-phase mapping -->
-  <section class="slide slide-rich" data-note="11:30 — 3 Phase mapping">
+  <section class="slide slide-rich" data-note="13:30 / 1m — AI-DLC 3-Phase ↔ 우리 Step 매핑. Inception은 사전 완료라는 점 강조">
     <h2>AI-DLC 3-Phase → Orchestrator</h2>
     <div class="illus-panel" style="margin-bottom:16px;padding:12px 16px">
       <svg viewBox="0 0 720 72" role="img" aria-label="AI-DLC 3 phases">
@@ -1881,7 +1945,7 @@
   </section>
 
   <!-- SLIDE 14b (NEW): AI-DLC vocabulary shift -->
-  <section class="slide slide-rich" data-note="12:00 — AI-DLC가 바꾼 어휘: Sprint→Bolt, Epic→Unit, Human→Checkpoint">
+  <section class="slide slide-rich" data-note="14:30 / 1m — 어휘 전환: 'Sprint 단위로 일정 잡자' 라는 말이 나오면 아직 SDLC + Copilot임">
     <h2>AI-DLC가 바꾼 어휘</h2>
     <p class="slide-lead">AWS의 핵심 통찰은 단순하다. AI가 실행 주체가 되면 <strong>시간 단위가 짧아지고</strong> <strong>인간의 위치가 바뀐다</strong>. 단어를 그대로 두면 우리는 여전히 SDLC로 일하게 된다.</p>
     <table style="font-size:14px">
@@ -1899,7 +1963,7 @@
   </section>
 
   <!-- SLIDE 15: AI-DLC 6 principles -->
-  <section class="slide slide-table" data-note="12:30 — AI-DLC principles">
+  <section class="slide slide-table" data-note="15:30 / 1m — AI-DLC 6 원칙 ↔ Silicon2 구현 1:1 매핑. 빠르게 훑기">
     <h2>AI-DLC 6대 원칙 ↔ 구현</h2>
     <table style="font-size:14px">
       <thead><tr><th>AI-DLC 원칙</th><th>Silicon2 구현</th></tr></thead>
@@ -1915,7 +1979,7 @@
   </section>
 
   <!-- SLIDE 16: Vibes-based vs Structured bolt -->
-  <section class="slide slide-split" data-note="13:30 — vibes vs structured">
+  <section class="slide slide-split" data-note="16:30 / 1m — Vibes vs Bolt 비교. '재현 불가능' 부분이 핵심 take-away">
     <h2>"Vibes-based" → Structured Bolt</h2>
     <div class="split-grid">
       <div class="split-col">
@@ -1958,7 +2022,7 @@
   </section>
 
   <!-- SLIDE 17: Harness Engineering layers -->
-  <section class="slide slide-rich" data-note="14:30 — Harness 정의: 모델 외부의 모든 것">
+  <section class="slide slide-rich" data-note="17:30 / 1.5m — Harness 정의 + 실험 근거(MetaGPT/AlphaCodium). 청중 호응이 가장 좋은 슬라이드">
     <h2>Harness Engineering</h2>
     <p class="slide-lead">2025–26 업계가 합의에 도달한 개념. <strong>모델 바깥의 전체 시스템</strong> — context, tools, mechanical constraints, verification gates, feedback loop, human checkpoint — 을 한 단위로 묶어 설계하는 것.</p>
     <div class="slide-duo">
@@ -1976,7 +2040,7 @@
   </section>
 
   <!-- SLIDE 18: Harness 4 components -->
-  <section class="slide slide-rich" data-note="15:30 — Harness 4 components">
+  <section class="slide slide-rich" data-note="19:00 / 1m — Harness 4대 구성요소 — 각 요소를 1줄씩 빠르게 설명">
     <h2>Harness 4대 구성요소</h2>
     <div class="slide-duo">
       <ul class="numbered-list">
@@ -1985,25 +2049,28 @@
         <li><strong>Verification Gates</strong>Step 2–8: compile · test · diff · graph</li>
         <li><strong>Feedback Loop</strong>3-Tier — Silent → Notify → Human</li>
       </ul>
-      <div class="illus-panel">
+      <div class="illus-panel harness-loop">
         <div class="illus-caption">Harness loop per step</div>
-        <svg viewBox="0 0 260 200" role="img">
-          <rect x="70" y="8" width="120" height="32" fill="rgba(194,78,58,0.1)" stroke="#c24e3a"/><text x="130" y="28" text-anchor="middle" font-size="10">Worker output</text>
-          <line x1="130" y1="40" x2="130" y2="58" stroke="#c24e3a"/>
-          <rect x="30" y="58" width="200" height="28" fill="#fff" stroke="#5a6b47"/><text x="130" y="76" text-anchor="middle" font-size="9">Verification gate (MCP/compile/test)</text>
-          <line x1="50" y1="86" x2="50" y2="110" stroke="#c24e3a"/><text x="50" y="125" text-anchor="middle" font-size="8" fill="#5a6b47">pass</text>
-          <line x1="210" y1="86" x2="210" y2="110" stroke="#c24e3a"/><text x="210" y="125" text-anchor="middle" font-size="8" fill="#c24e3a">fail</text>
-          <rect x="10" y="130" width="80" height="28" fill="rgba(90,107,71,0.15)" stroke="#5a6b47"/><text x="50" y="148" text-anchor="middle" font-size="8">next step</text>
-          <rect x="170" y="130" width="80" height="28" fill="rgba(194,78,58,0.1)" stroke="#c24e3a"/><text x="210" y="148" text-anchor="middle" font-size="8">3-Tier retry</text>
-          <path d="M210 158 Q130 185 50 158" fill="none" stroke="#d4cfc4" stroke-dasharray="4"/>
-          <text x="130" y="188" text-anchor="middle" font-size="8" fill="#8a8a85">structured feedback → context L3</text>
-        </svg>
+        <div class="hl-node hl-input"><strong>Worker output</strong><small>code / artifact</small></div>
+        <div class="hl-arrow">↓</div>
+        <div class="hl-node hl-gate"><strong>Verification gate</strong><small>MCP · compile · test · diff</small></div>
+        <div class="hl-branch">
+          <div class="hl-branch-col">
+            <div class="hl-label hl-pass">pass ✓</div>
+            <div class="hl-node hl-next"><strong>Next step</strong><small>continue chain</small></div>
+          </div>
+          <div class="hl-branch-col">
+            <div class="hl-label hl-fail">fail ✗</div>
+            <div class="hl-node hl-retry"><strong>3-Tier retry</strong><small>T1 → T2 → T3</small></div>
+          </div>
+        </div>
+        <div class="hl-feedback">↺ structured feedback → context Layer 3</div>
       </div>
     </div>
   </section>
 
   <!-- SLIDE 18b (NEW): Harness before/after on one page -->
-  <section class="slide slide-rich" data-note="16:00 — Harness 적용 전후: 같은 page를 두 방식으로 처리한 결과">
+  <section class="slide slide-rich" data-note="20:00 / 1.5m — 동일 page 비교 데이터. '결과 차이는 모델 능력이 아니다' 한 줄로 마무리">
     <h2>Harness 전/후 — 같은 page, 다른 결과</h2>
     <p class="slide-lead">"Harness가 정말 효과 있나"의 답은 동일한 page를 두 방식으로 처리해보면 명확하다. 다음은 <code>order.list</code> 1 page를 두 setup에서 처리한 측정 결과(내부 PoC).</p>
 
@@ -2041,7 +2108,7 @@
   </section>
 
   <!-- SLIDE 19: Spec + Harness dual structure -->
-  <section class="slide slide-statement" data-note="16:30 — Spec + Harness">
+  <section class="slide slide-statement" data-note="21:30 / 0.5m — Spec + Harness 이중 구조. 짧게 강조하고 다음으로">
     <h2>Spec + Harness 이중 구조</h2>
     <p class="statement">Spec says <em>what you want</em> · Harness proves <em>you got it</em></p>
     <div class="split-grid" style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0 40px;margin-top:36px;max-width:640px">
@@ -2066,7 +2133,7 @@
   </section>
 
   <!-- SLIDE 20: 3-Tier Self-Correction -->
-  <section class="slide slide-rich" data-note="17:30 — 3-Tier escalation">
+  <section class="slide slide-rich" data-note="22:00 / 1m — 3-Tier 자기 보정. 80/15/5 비율이 인력 모델의 핵심">
     <h2>3-Tier Self-Correction</h2>
     <div class="bar-chart" style="max-width:420px;margin-bottom:16px">
       <div class="bar-row"><span>T1 auto</span><div class="bar-track"><div class="bar-fill" style="width:80%"></div></div><span class="bar-val">~80%</span></div>
@@ -2090,7 +2157,7 @@
   </section>
 
   <!-- SLIDE 21: Academic references -->
-  <section class="slide slide-rich" data-note="18:30 — Academic references">
+  <section class="slide slide-rich" data-note="23:00 / 0.5m — 학술 근거 — 표만 보여주고 빠르게 다음으로">
     <h2>학술·업계 근거</h2>
     <p class="slide-lead">Orchestrator 설계는 단일 논문이 아니라, 2024–26 에이전트·마이그레이션 연구의 공통 결론을 운영체계로 묶은 것.</p>
     <table style="font-size:13px">
@@ -2106,7 +2173,7 @@
   </section>
 
   <!-- SLIDE 22: Competitive differentiation -->
-  <section class="slide slide-rich" data-note="19:30 — Competitive differentiation: '구조화 + 검증 + 규모' 동시 만족하는 카테고리는 비어 있다">
+  <section class="slide slide-rich" data-note="23:30 / 0.5m — 시장 포지셔닝. spectrum의 'Silicon2'가 비어 있던 칸이라는 점만 강조">
     <h2>경쟁 접근과의 차별</h2>
     <p class="slide-lead">"AI로 마이그레이션"이라는 키워드를 검색하면 다섯 가지 접근이 나온다. 이 중 <strong>구조화 + 검증 + 707 page 규모</strong>를 동시에 만족하는 카테고리는 비어 있다.</p>
 
@@ -2132,21 +2199,21 @@
   </section>
 
   <!-- SLIDE 23: Part 3 Section -->
-  <section class="slide slide-section" data-note="20:00 — Part 3 적용 시작">
+  <section class="slide slide-section" data-note="24:00 / 0.5m — Part 3 적용 시작: 아키텍처 + Pipeline + Workers 14분">
     <span class="section-watermark" aria-hidden="true">03</span>
     <h2>적용</h2>
-    <p class="section-time">Orchestrator 아키텍처 · Pipeline · Workers · 약 12분</p>
+    <p class="section-time">Orchestrator 아키텍처 · Pipeline · Workers · 약 14분</p>
   </section>
 
   <!-- SLIDE 24: Service positioning -->
-  <section class="slide slide-statement" data-note="20:30 — One-liner positioning">
+  <section class="slide slide-statement" data-note="24:30 / 0.5m — 한 줄 포지셔닝. 다음 12분의 모든 내용을 한 문장으로">
     <h2>서비스 포지셔닝</h2>
     <p class="statement">Spec-driven, harness-enforced,<br>AI-DLC-aligned migration orchestrator</p>
     <p class="statement-sub">PHP (Gnuboard5) → React (Next.js + FSD) + Spring Boot (DDD/Hexagonal)<br>AWS Bedrock (Claude) · MCP · Git Worktree · FastAPI</p>
   </section>
 
   <!-- SLIDE 25: Hub-and-Spoke architecture -->
-  <section class="slide slide-rich" data-note="21:30 — Architecture overview: 모든 통신은 hub를 경유한다">
+  <section class="slide slide-rich" data-note="25:00 / 1.5m — Hub-Spoke: Worker는 서로 모름. Andrew Ng 인용으로 정당화">
     <h2>Hub-and-Spoke Orchestration</h2>
     <p class="slide-lead"><strong>Worker는 서로를 모른다.</strong> Orchestrator만이 artifact를 중재한다 — Andrew Ng (Multi-Agent 2024): "에이전트 간 자유 상호작용은 품질 예측이 불가능하다."</p>
     <div class="slide-duo">
@@ -2178,7 +2245,7 @@
   </section>
 
   <!-- SLIDE 26: 9-step pipeline -->
-  <section class="slide slide-steps" data-note="22:30 — 9 step pipeline overview: 한 page = 9 step bolt">
+  <section class="slide slide-steps" data-note="26:30 / 1m — 9-step 오버뷰. 다음 두 슬라이드에서 각 step 상세">
     <h2>9-Step Pipeline (Page당)</h2>
     <p class="slide-lead" style="margin-bottom:20px">한 page를 처리하는 사이클은 9 step의 <strong>고정된 시퀀스</strong>. 각 step은 schema-validated artifact를 출력하고, 다음 step의 입력으로 forward. 실패는 같은 step 안에서 3-Tier로 처리.</p>
     <div class="steps-bar">
@@ -2203,7 +2270,7 @@
   </section>
 
   <!-- SLIDE 26b (NEW): Step detail 1–5 -->
-  <section class="slide slide-rich" data-note="23:00 — 9-step 상세 (1~5): 각 step의 입력·출력·검증 게이트">
+  <section class="slide slide-rich" data-note="27:30 / 1.5m — Step 1–5 상세. 각 step의 gate가 핵심">
     <h2>9-Step Detail · Inception + Construction (1–5)</h2>
     <p class="slide-lead">9-step pipeline 중 <strong>Step 1–5</strong>는 spec 로딩에서 React/Java 코드 생성까지. 각 step의 출력은 다음 step의 입력 schema이며, 모든 step에 verification gate가 inline으로 존재.</p>
     <div class="step-detail-grid" style="grid-template-columns:1fr 1fr 1fr">
@@ -2247,7 +2314,7 @@
   </section>
 
   <!-- SLIDE 26c (NEW): Step detail 6–9 -->
-  <section class="slide slide-rich" data-note="23:30 — 9-step 상세 (6~9): 동등성 검증과 학습">
+  <section class="slide slide-rich" data-note="29:00 / 1.5m — Step 6–9: Step 8 Equivalence가 Greenfield에 없는 핵심">
     <h2>9-Step Detail · Verification + Operations (6–9)</h2>
     <p class="slide-lead">Step <strong>6–9</strong>가 SDLC 교과서에 없는 영역이다. "정말 동일한가"의 자동 증명과, 다음 page를 더 잘 처리하기 위한 학습 단계.</p>
     <div class="step-detail-grid" style="grid-template-columns:1fr 1fr 1fr">
@@ -2291,7 +2358,7 @@
   </section>
 
   <!-- SLIDE 27: Artifact chain flow -->
-  <section class="slide slide-rich" data-note="23:30 — Artifact chain: 각 단계 출력이 다음 단계 입력의 schema-validated 형태">
+  <section class="slide slide-rich" data-note="30:30 / 1m — Artifact chain: NL vs Schema 비교가 MetaGPT 데이터의 핵심">
     <h2>구조화된 Artifact Chain</h2>
     <p class="slide-lead">Worker 간 통신은 자연어가 아니라 <strong>스키마 검증된 artifact</strong>. MetaGPT(arXiv 2023)에 따르면 자연어 체이닝 대비 executability가 <strong>2.25 → 3.75</strong>로 향상된다.</p>
 
@@ -2335,7 +2402,7 @@
   </section>
 
   <!-- SLIDE 28: 4 Workers table -->
-  <section class="slide slide-rich" data-note="24:30 — Workers detail: single-focus + 모델 차등 + 결정론적 MCP">
+  <section class="slide slide-rich" data-note="31:30 / 1m — 4 Worker. MCP가 결정론적 (LLM 아님) 이라는 점 강조">
     <h2>4종 Worker</h2>
     <p class="slide-lead">Andrew Ng 가이드: <strong>"하나의 worker = 하나의 책임"</strong>. 모델·도구를 분리하여 한 page에서 실패가 다른 page로 전파되지 않도록 한다.</p>
     <table style="font-size:13px;margin-bottom:20px">
@@ -2369,7 +2436,7 @@
   </section>
 
   <!-- SLIDE 29: 3-Layer Context -->
-  <section class="slide slide-rich" data-note="25:30 — Context 3-layer">
+  <section class="slide slide-rich" data-note="32:30 / 1m — 3-Layer Context. L1 cache로 90% 비용 절감이 핵심">
     <h2>3-Layer Context (Harness)</h2>
     <div class="slide-duo">
       <div class="stack">
@@ -2392,7 +2459,7 @@
   </section>
 
   <!-- SLIDE 30: Tech stack grid -->
-  <section class="slide slide-rich" data-note="26:30 — Tech stack: 각 레이어의 선택 근거">
+  <section class="slide slide-rich" data-note="33:30 / 1m — 기술 스택. 교체 가능성이 선택 기준임을 강조">
     <h2>기술 스택 — 각 레이어의 선택 근거</h2>
     <p class="slide-lead">"왜 이 스택"의 답은 <strong>교체 가능성과 검증 가능성</strong>이다. 단일 vendor lock-in을 피하고, 각 레이어에 표준 verification tool이 있는 것을 골랐다.</p>
     <table style="font-size:13px;margin-top:8px">
@@ -2411,7 +2478,7 @@
   </section>
 
   <!-- SLIDE 31: PoC bbs.alert_close -->
-  <section class="slide slide-split" data-note="27:30 — PoC: 최소 리스크 page로 end-to-end 검증">
+  <section class="slide slide-split" data-note="34:30 / 1m — PoC: 가장 단순한 page로 E2E 검증. 54 tests 모두 통과">
     <h2>PoC: bbs.alert_close</h2>
     <p class="slide-lead" style="margin-bottom:24px">"전체 파이프라인이 실제로 돌아가는가"를 가장 낮은 리스크로 검증하기 위한 PoC. 707 spec 중 <strong>복잡도 LOW + review 0.95</strong>인 page를 선정.</p>
     <div class="split-grid">
@@ -2458,7 +2525,7 @@
   </section>
 
   <!-- SLIDE 32: Dashboard UI -->
-  <section class="slide slide-rich" data-note="28:30 — Dashboard: 인간 oversight 표면. 4가지 화면">
+  <section class="slide slide-rich" data-note="35:30 / 1m — Dashboard = human oversight 표면. 4 화면">
     <h2>Dashboard — Human Oversight UI</h2>
     <p class="slide-lead">Dashboard는 단순한 모니터링이 아니라 <strong>Human Oversight의 표면</strong>. AI-DLC가 말하는 <em>Mob Elaboration</em>·<em>Mob Construction</em>을 UI로 구현한 형태.</p>
     <div class="slide-duo">
@@ -2489,7 +2556,7 @@
   </section>
 
   <!-- SLIDE 33: Demo flow steps -->
-  <section class="slide slide-rich" data-note="29:30 — Demo flow: 실제 실행 시 일어나는 일">
+  <section class="slide slide-rich" data-note="36:30 / 1m — Demo: 1 page가 7–12분 안에 React+Java로. 실제 실행 결과">
     <h2>실행 흐름 — Demo Sequence</h2>
     <p class="slide-lead">발표 중 보여줄 실제 실행 시나리오. 7–12분 안에 1 page가 React + Java 양 코드베이스로 변환되고 git에 커밋된다.</p>
     <div class="slide-duo">
@@ -2518,24 +2585,30 @@
   </section>
 
   <!-- SLIDE 34: Part 4 Section -->
-  <section class="slide slide-section" data-note="30:00 — Part 4 효과 시작">
+  <section class="slide slide-section" data-note="37:30 / 0.5m — Part 4 효과: ROI + 품질 + 로드맵 9분">
     <span class="section-watermark" aria-hidden="true">04</span>
     <h2>효과</h2>
-    <p class="section-time">ROI · 품질 · 학습 · 로드맵 · 약 8분</p>
+    <p class="section-time">ROI · 품질 · 학습 · 로드맵 · 약 9분</p>
   </section>
 
   <!-- SLIDE 35: Velocity -->
-  <section class="slide slide-stat-hero" data-note="30:30 — Velocity">
-    <h2>속도 효과</h2>
+  <section class="slide slide-stat-hero" data-note="38:00 / 1m — Velocity: 단순 시간 단축이 아니라 '단위 자체가 바뀐다'는 패러다임 메시지">
+    <h2>속도 효과 — 단위 자체가 바뀐다</h2>
     <div class="stat-hero">
-      <div class="number">42<span class="unit">yr</span></div>
-      <p class="caption">수동 산술 대비 Orchestrator 현실적 목표: <strong>6–12개월</strong><br>Page당 bolt: <strong>min–hr</strong></p>
+      <div class="number">42<span class="unit">yr</span>&nbsp;<span style="font-size:0.35em;color:var(--ink-faint)">→</span>&nbsp;<span style="color:var(--accent)">9<span class="unit">mo</span></span></div>
+      <p class="caption">수동 산술 vs Orchestrator 현실 목표 (Realistic 시나리오 8 mo + cutover phase)<br><strong>약 56× 시간 단축</strong>이 본질이 아니다 — <strong>"page" 라는 단위가 hours로 압축</strong>되었다는 사실이 본질.</p>
     </div>
-    <p class="statement-sub" style="margin-top:32px;padding-top:24px;border-top:1px solid var(--rule)">"42년 → 1년" = <strong>프로덕션 배포</strong>가 아니라<br><strong>1차 코드베이스 + 스테이징 검증</strong> (팀 2–3명 + Review Queue)</p>
+    <dl class="stat-support">
+      <div><dt>Sprint</dt><dd>→ Bolt (hours)</dd></div>
+      <div><dt>Epic</dt><dd>→ 1 page (Unit of Work)</dd></div>
+      <div><dt>Sprint planning</dt><dd>→ aispec batch</dd></div>
+      <div><dt>QA cycle</dt><dd>→ inline gates</dd></div>
+    </dl>
+    <p class="statement-sub" style="margin-top:24px;padding-top:20px;border-top:1px solid var(--rule)">"42년 → 9개월" = <strong>프로덕션 배포</strong>가 아니라 <strong>1차 코드베이스 + 스테이징 검증</strong>까지의 기간 (팀 2–3명 + Review Queue · 별도 통합/QA phase 필요).</p>
   </section>
 
   <!-- SLIDE 36: Cost compounding table -->
-  <section class="slide slide-rich" data-note="31:30 — Cost compounding">
+  <section class="slide slide-rich" data-note="39:00 / 1m — 비용 학습 곡선. 51+ page 부터 $0.42로 수렴">
     <h2>비용 — Compounding Improvement</h2>
     <div class="slide-duo">
       <div>
@@ -2570,7 +2643,7 @@
   </section>
 
   <!-- SLIDE 36b (NEW): Scenario projections -->
-  <section class="slide slide-rich" data-note="32:00 — 시나리오: 707 page 완료 시점·비용을 세 시나리오로 honest하게 제시">
+  <section class="slide slide-rich" data-note="40:00 / 1m — 시나리오 3종. Conservative조차 수동 대비 1/700 비용임을 강조">
     <h2>시나리오 — 707 page 완주 비용·일정</h2>
     <p class="slide-lead">"42년 → 6–12개월"은 평균값이다. 실제 산출은 <strong>auto-fix rate</strong>와 <strong>인간 review 비율</strong>에 따라 갈린다. 세 시나리오를 솔직하게 보여준다.</p>
     <div class="scenarios" style="margin-top:8px">
@@ -2612,7 +2685,7 @@
   </section>
 
   <!-- SLIDE 37: Quality effects -->
-  <section class="slide slide-rich" data-note="32:30 — Quality effects">
+  <section class="slide slide-rich" data-note="41:00 / 0.5m — 품질 효과: '판단만 집중'으로 human focus 재정의">
     <h2>품질 효과</h2>
     <div class="slide-duo">
       <div class="two-list">
@@ -2635,14 +2708,14 @@
   </section>
 
   <!-- SLIDE 38: Expected outcomes -->
-  <section class="slide slide-statement" data-note="33:30 — Expected outcomes">
+  <section class="slide slide-statement" data-note="41:30 / 1m — 기대 결과를 '솔직하게': zero-touch가 아님. 강조용 슬라이드">
     <h2>완전 구현 시 기대 결과</h2>
     <p class="statement">707 page 중 <strong>60–75%</strong> 자동/준자동 1차 마이그레이션<br><strong>25–40%</strong> Review Queue + 수동 보완<br>프로덕션 ready까지 <strong>통합 · QA · refactor Phase</strong> 추가 필요</p>
     <p class="statement-sub">성공 정의: zero-touch 배포 ✗ · <strong>대량 1차 변환 + artifact chain + 모듈별 cutover</strong> ✓</p>
   </section>
 
   <!-- SLIDE 39: Roadmap table -->
-  <section class="slide slide-rich" data-note="34:30 — Roadmap">
+  <section class="slide slide-rich" data-note="42:30 / 1m — 로드맵 4 단계. 현재 PoC → 9개월에 Production">
     <h2>로드맵</h2>
     <div class="roadmap-viz">
       <div class="rm-phase current"><div class="rm-name">PoC</div><div class="rm-goal">bbs.alert_close E2E · Step 1–5 · 54 tests</div><div class="rm-when">현재</div></div>
@@ -2662,7 +2735,7 @@
   </section>
 
   <!-- SLIDE 40: Risks honest -->
-  <section class="slide slide-rich" data-note="35:30 — Risks honest">
+  <section class="slide slide-rich" data-note="43:30 / 1m — 리스크 솔직 평가. 'AI 80% · 사람 20%'가 성공 정의임">
     <h2>리스크 (솔직한 평가)</h2>
     <div class="slide-duo">
       <div class="risk-matrix">
@@ -2672,19 +2745,19 @@
         <div class="risk-cell" style="border-color:var(--accent)"><h4>기대치</h4><p>성공 = "AI 80% · 사람 20%" 로 정의. zero-touch 배포는 목표 아님.</p></div>
       </div>
       <div class="illus-panel">
-        <div class="illus-caption">Mitigation stack</div>
-        <svg viewBox="0 0 260 160" role="img">
-          <rect x="40" y="120" width="180" height="24" fill="rgba(28,28,26,0.06)" stroke="#3a3a36"/><text x="130" y="136" text-anchor="middle" font-size="8">기대치 관리 · 로드맵 커뮤니케이션</text>
-          <rect x="55" y="88" width="150" height="24" fill="rgba(90,107,71,0.1)" stroke="#5a6b47"/><text x="130" y="104" text-anchor="middle" font-size="8">Review Queue · Tier 3 · module cutover</text>
-          <rect x="70" y="56" width="120" height="24" fill="rgba(194,78,58,0.1)" stroke="#c24e3a"/><text x="130" y="72" text-anchor="middle" font-size="8">Harness gates · equivalence Step 8</text>
-          <rect x="85" y="24" width="90" height="24" fill="rgba(194,78,58,0.2)" stroke="#c24e3a"/><text x="130" y="40" text-anchor="middle" font-size="8">707 aispec ground truth</text>
-        </svg>
+        <div class="illus-caption">Mitigation stack — 위에서 아래로 깊어지는 보호층</div>
+        <div class="pyramid" style="margin-top:8px">
+          <div class="py-slab top"><strong>707 aispec ground truth</strong><small>Inception이 이미 완료된 사실</small></div>
+          <div class="py-slab mid"><strong>Harness gates · Equivalence Step 8</strong><small>MCP graph/SQL/schema 자동 비교</small></div>
+          <div class="py-slab base"><strong>Review Queue · Tier 3 · Module cutover</strong><small>판단 필요한 5–10% 사람 개입 + 점진 배포</small></div>
+          <div class="py-slab" style="background:rgba(28,28,26,0.06);border-color:var(--rule-strong);align-self:stretch"><strong style="color:var(--ink-muted)">기대치 관리 · 로드맵 커뮤니케이션</strong><small>"zero-touch 아님" 사전 합의</small></div>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- SLIDE 41: Summary -->
-  <section class="slide slide-rich" data-note="36:30 — Summary three pillars: 마지막으로 3축 정리 + 핵심 take-away">
+  <section class="slide slide-rich" data-note="44:30 / 1m — 마무리: 이론 → 적용 → 효과 3축 정리. 한 줄 take-away">
     <h2>이론 → 적용 → 효과 — 종합</h2>
     <div class="scenarios" style="margin-top:8px">
       <div class="sc-card">
@@ -2722,7 +2795,7 @@
   </section>
 
   <!-- SLIDE 42: Closing -->
-  <section class="slide slide-cover" data-note="37:30 — 마무리">
+  <section class="slide slide-cover" data-note="45:30 / 0.5m — 마무리 표지. '707 pages, one verified bolt at a time' 반복">
     <div class="cover-top meta">Silicon2 Migration Orchestrator</div>
     <div class="cover-body">
       <h1 style="font-size:clamp(32px,3.5vw,42px)">Legacy Migration AI-DLC</h1>
@@ -2732,7 +2805,7 @@
   </section>
 
   <!-- SLIDE 43: Q&A -->
-  <section class="slide slide-cover" data-note="38:00 — Q&amp;A">
+  <section class="slide slide-cover" data-note="46:00 — Q&amp;A 시작">
     <div class="cover-body">
       <h1>Q &amp; A</h1>
       <p class="subtitle">감사합니다</p>

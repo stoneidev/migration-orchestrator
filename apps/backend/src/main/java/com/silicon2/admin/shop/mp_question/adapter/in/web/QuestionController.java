@@ -23,8 +23,13 @@ public class QuestionController {
     private final DeleteQuestionUseCase deleteQuestionUseCase;
 
     @GetMapping("/list")
-    public ResponseEntity<List<QuestionResponse>> listAllQuestions() {
-        List<QuestionResponse> questions = listQuestionsUseCase.execute();
+    public ResponseEntity<List<QuestionResponse>> listAllQuestions(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String status
+    ) {
+        List<QuestionResponse> questions = listQuestionsUseCase.execute(category, dateFrom, dateTo, status);
         return ResponseEntity.ok(questions);
     }
 

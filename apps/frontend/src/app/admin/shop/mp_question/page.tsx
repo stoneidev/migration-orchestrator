@@ -1,17 +1,61 @@
 'use client';
 
-import { useState } from 'react';
-import { mockQuestions } from './mock-data';
-import { PeriodFilter, CategoryFilter } from './types';
+import { useState, useEffect } from 'react';
+import { PeriodFilter, CategoryFilter, Question } from './types';
+import { fetchQuestions } from './api';
 
 export default function MyQuestionPage() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('1 Month');
   const [startDate, setStartDate] = useState('04/25/2026');
   const [endDate, setEndDate] = useState('05/25/2026');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const handleSearch = () => {
-    console.log('Search:', { categoryFilter, periodFilter, startDate, endDate });
+  // Calculate dates based on period filter
+  useEffect(() => {
+    const today = new Date();
+    const endDateStr = `${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}/${today.getFullYear()}`;
+    setEndDate(endDateStr);
+
+    const startDateObj = new Date(today);
+    switch (periodFilter) {
+      case '1 Week':
+        startDateObj.setDate(today.getDate() - 7);
+        break;
+      case '1 Month':
+        startDateObj.setMonth(today.getMonth() - 1);
+        break;
+      case '3 Month':
+        startDateObj.setMonth(today.getMonth() - 3);
+        break;
+      case 'This Year':
+        startDateObj.setMonth(0);
+        startDateObj.setDate(1);
+        break;
+    }
+    const startDateStr = `${String(startDateObj.getMonth() + 1).padStart(2, '0')}/${String(startDateObj.getDate()).padStart(2, '0')}/${startDateObj.getFullYear()}`;
+    setStartDate(startDateStr);
+  }, [periodFilter]);
+
+  const handleSearch = async () => {
+    setLoading(true);
+    setIsInitialLoad(false);
+
+    try {
+      const results = await fetchQuestions({
+        category: categoryFilter,
+        dateFrom: startDate,
+        dateTo: endDate,
+      });
+      setQuestions(results);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setQuestions([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -107,8 +151,48 @@ export default function MyQuestionPage() {
         </button>
       </div>
 
-      {/* Results Area - Empty State */}
-      <div className="flex-1"></div>
+      {/* Results Area */}
+      <div className="px-4 pb-32">
+        {loading && (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {!loading && !isInitialLoad && questions.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            검색 결과가 없습니다
+          </div>
+        )}
+
+        {!loading && questions.length > 0 && (
+          <>
+            <p className="text-sm text-gray-600 mb-3">총 {questions.length}건</p>
+            <div className="space-y-3">
+              {questions.map((q) => (
+                <div key={q.id} className="border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                      {q.category}
+                    </span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                      q.status === 'answered' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {q.status === 'answered' ? '답변완료' : '미답변'}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">{q.productName}</h3>
+                  <p className="text-sm text-gray-600 line-clamp-2">{q.questionText}</p>
+                  <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
+                    <span>{q.userName}</span>
+                    <span>{q.createdAt}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Chat Button */}
       <div className="fixed bottom-24 right-6">
