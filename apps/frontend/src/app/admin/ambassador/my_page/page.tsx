@@ -1,11 +1,34 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import IDCard from './components/IDCard';
 import SocialChannels from './components/SocialChannels';
 import RewardCard from './components/RewardCard';
 import { ambassadorProfile, socialChannels, ambassadorRewards } from './mock-data';
+import { checkAmbassadorStatus } from './api';
+import { AmbassadorProviders } from './providers';
 
-export default function AmbassadorMyPage() {
+function AmbassadorMyPageContent() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['ambassadorStatus'],
+    queryFn: checkAmbassadorStatus,
+    retry: 1,
+  });
+
+  const profile = data?.profile || ambassadorProfile;
+  const channels = data?.socialChannels || socialChannels;
+  const rewards = data?.rewards || ambassadorRewards;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen w-full bg-white overflow-x-hidden flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-purple-600 text-lg">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-white overflow-x-hidden">
       {/* Main Container */}
@@ -19,7 +42,7 @@ export default function AmbassadorMyPage() {
 
           {/* ID Card */}
           <div className="mb-5 pt-2">
-            <IDCard profile={ambassadorProfile} />
+            <IDCard profile={profile} />
           </div>
 
           {/* CTA Text */}
@@ -54,7 +77,7 @@ export default function AmbassadorMyPage() {
           </div>
 
           {/* Social Channels */}
-          <SocialChannels channels={socialChannels} />
+          <SocialChannels channels={channels} />
 
           {/* Ambassador Rewards */}
           <div className="px-6 py-7 text-center bg-white">
@@ -63,7 +86,7 @@ export default function AmbassadorMyPage() {
             </h3>
 
             <div className="flex justify-between gap-3 mb-7">
-              {ambassadorRewards.map((reward, index) => (
+              {rewards.map((reward, index) => (
                 <RewardCard key={index} reward={reward} index={index} />
               ))}
             </div>
@@ -106,5 +129,13 @@ export default function AmbassadorMyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AmbassadorMyPage() {
+  return (
+    <AmbassadorProviders>
+      <AmbassadorMyPageContent />
+    </AmbassadorProviders>
   );
 }

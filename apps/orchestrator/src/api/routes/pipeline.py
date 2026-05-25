@@ -24,6 +24,11 @@ class StepRunRequest(BaseModel):
     page_id: str
 
 
+class StepRetryRequest(BaseModel):
+    page_id: str
+    step_number: int
+
+
 def _get_engine():
     from src.db.deps import configure_db, _SessionFactory
     settings = Settings()
@@ -75,6 +80,40 @@ def run_single_step(request: StepRunRequest, background_tasks: BackgroundTasks):
     _running_tasks[task_id] = {"page_id": request.page_id, "status": "queued", "started_at": datetime.utcnow().isoformat()}
     background_tasks.add_task(_run_single_step_bg, request.page_id, task_id)
     return {"success": True, "data": {"task_id": task_id, "page_id": request.page_id, "message": f"Running next step for {request.page_id}"}}
+
+
+@router.post("/pipeline/retry-step", status_code=202)
+def retry_step(request: StepRetryRequest, background_tasks: BackgroundTasks):
+    """Reset a specific step and re-run from that point."""
+    task_id = f"retry-{request.page_id}-step{request.step_number}-{datetime.utcnow().strftime('%H%M%S')}"
+    _running_tasks[task_id] = {"page_id": request.page_id, "step": request.step_number, "status": "queued", "started_at": datetime.utcnow().isoformat()}
+    background_tasks.add_task(_retry_step_bg, request.page_id, request.step_number, task_id)
+    return {"success": True, "data": {"task_id": task_id, "page_id": request.page_id, "step": request.step_number, "message": f"Retrying step {request.step_number} for {request.page_id}"}}
+
+
+async def _retry_step_bg(page_id: str, step_number: int, task_id: str):
+    _running_tasks[task_id]["status"] = "running"
+    try:
+        sf, settings = _get_engine()
+        # Reset page to before this step
+        with sf() as s:
+            page = s.get(Page, page_id)
+            if page:
+                page.current_step = step_number - 1
+                page.migration_status = "running"
+                # Delete old executions for this step
+                s.query(StepExecution).filter_by(page_id=page_id, step_number=step_number).delete()
+                s.query(Artifact).filter_by(page_id=page_id, step_number=step_number).delete()
+                s.commit()
+
+        # Run the step
+        steps = create_pipeline_steps(settings)
+        engine = PipelineEngine(steps=steps, session_factory=sf)
+        await engine.run_next_step(page_id)
+        _running_tasks[task_id]["status"] = "completed"
+    except Exception as e:
+        _running_tasks[task_id]["status"] = "failed"
+        _running_tasks[task_id]["error"] = str(e)
 
 
 @router.get("/pipeline/status")

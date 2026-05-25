@@ -208,8 +208,9 @@ class Step7Integration(BaseStep):
     name = "integration"
     step_number = 7
 
-    def __init__(self, frontend_base: Path):
+    def __init__(self, frontend_base: Path, backend_dir: Path | None = None):
         self.frontend_base = frontend_base
+        self.backend_dir = backend_dir
 
     async def execute(self, context: StepContext) -> StepResult:
         frontend_dir = self.frontend_base / context.page_id.replace(".", "/")
@@ -221,6 +222,7 @@ class Step7Integration(BaseStep):
             spec=context.spec,
             api_contract=context.api_contract,
             frontend_dir=frontend_dir,
+            backend_dir=self.backend_dir,
         )
 
         if result.success:
@@ -228,6 +230,8 @@ class Step7Integration(BaseStep):
                 success=True,
                 artifacts={"files_modified": result.files_modified, "report": result.report},
                 model_used="sonnet",
+                cost=result.report.get("cost", 0),
+                duration_ms=result.report.get("duration_ms", 0),
             )
         return StepResult(success=False, error=result.error)
 
@@ -273,7 +277,10 @@ def create_pipeline_steps(settings: Settings) -> list[BaseStep]:
         ),
         Step5JavaGen(output_base=project_root / "apps" / "backend" / "src" / "main" / "java"),
         Step6JavaTest(output_base=project_root / "apps" / "backend"),
-        Step7Integration(frontend_base=project_root / "apps" / "frontend" / "src" / "app" / "admin"),
+        Step7Integration(
+            frontend_base=project_root / "apps" / "frontend" / "src" / "app" / "admin",
+            backend_dir=project_root / "apps" / "backend",
+        ),
         Step8Equivalence(mcp_server_path=settings.mcp_server_path),
         Step9Complete(),
     ]

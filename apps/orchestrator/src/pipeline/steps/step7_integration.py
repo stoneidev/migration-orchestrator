@@ -12,38 +12,58 @@ class IntegrationResult:
     error: str = ""
 
 
-INTEGRATION_PROMPT = """You are integrating the React frontend with the Spring Boot backend.
+INTEGRATION_PROMPT = """You are performing end-to-end integration between a React frontend and Spring Boot backend.
 
-## Task
-The React frontend currently uses mock data (mock-data.ts).
-You need to replace mock data with actual API calls to the backend.
+## Your Goal
+Make the Frontend (React/Next.js) successfully call the Backend (Spring Boot) API and display real data.
 
-## Backend API Info
-- Backend runs at: http://localhost:8080/api
-- API Contract (OpenAPI):
+## Current State
+- Frontend is at: {frontend_dir}
+- Backend is at: {backend_dir}
+- Frontend has mock data that renders correctly
+- Backend has controllers but may need fixes to work end-to-end
+
+## API Contract
 {api_contract}
 
-## Current Frontend Files Location
-{frontend_dir}
+## Steps You MUST Do (in order):
 
-## What to do:
-1. Read the existing mock-data.ts to understand the data structure
-2. Read the existing page.tsx and components to see how data is used
-3. Create/update an API client file that calls the actual backend endpoints
-4. Replace mock data imports with API calls using fetch or TanStack Query
-5. Keep the mock data as fallback (if API fails, show mock data)
-6. Ensure the page still renders correctly with both mock and real data
+### 1. Fix Backend to be runnable
+- Check `application-nomysql.yml` exists (H2 in-memory DB for local dev)
+  - If not, create it with: H2 MODE=MySQL, ddl-auto: create-drop, flyway disabled
+- Check CORS config allows localhost:3001
+- Add `@Setter` and `@NoArgsConstructor` to JPA entities if missing
+- Create a DataInitializer class (@Profile("nomysql")) that inserts test data on startup
+- Run `./gradlew compileJava` — fix any errors
 
-## Rules:
-- Use TanStack Query (useQuery) for data fetching
-- API base URL should be configurable: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'
-- Handle loading and error states
-- Keep 'use client' directive
-- Do NOT change the visual appearance — only the data source
+### 2. Start Backend and verify API
+- Run: `./gradlew bootRun --args='--spring.profiles.active=nomysql'` in background
+- Wait 10 seconds for startup
+- Test the API endpoint with curl: `curl http://localhost:8080/api/ambassador/my-page/status?memberId=1`
+- If it fails, read the error and fix
 
-## After modification:
-- The page should work with mock data when backend is off
-- The page should fetch real data when backend is running
+### 3. Fix Frontend API calls
+- Read the Backend Controller's `@RequestMapping` to get the actual URL paths
+- Update Frontend's `api.ts` to call the correct Backend URLs
+- The Backend has `context-path: /api` so full URL is `http://localhost:8080/api/` + controller path
+- Add fallback to mock data if Backend is unreachable (try/catch with timeout)
+- Add `AbortSignal.timeout(3000)` to fetch calls
+
+### 4. Verify end-to-end
+- Start Frontend: `npx next dev --port 3001`
+- Open `http://localhost:3001/admin/ambassador/my_page`
+- Check browser console for errors
+- If there are errors, fix them
+
+### 5. Cleanup
+- Kill backend process when done testing
+- Ensure Frontend works both WITH and WITHOUT backend (mock fallback)
+
+## IMPORTANT
+- Run gradle/npm commands to verify your changes compile
+- If backend compile fails, fix it before moving on
+- If frontend has import errors, fix them
+- The final state must be: Frontend renders correctly and calls Backend API when available
 """
 
 
@@ -51,6 +71,7 @@ async def integrate_frontend_backend(
     spec: dict | None,
     api_contract: str | None,
     frontend_dir: Path,
+    backend_dir: Path | None = None,
     worker: ClaudeCLIWorker | None = None,
 ) -> IntegrationResult:
     if worker is None:
@@ -58,33 +79,47 @@ async def integrate_frontend_backend(
 
     api_summary = api_contract[:2000] if api_contract else "No API contract available"
 
+    # Find backend dir
+    if backend_dir is None:
+        backend_dir = frontend_dir.parent.parent.parent.parent.parent / "backend"
+
     prompt = INTEGRATION_PROMPT.format(
         api_contract=api_summary,
         frontend_dir=str(frontend_dir),
+        backend_dir=str(backend_dir),
     )
+
+    # Run from project root so CLI can access both frontend and backend
+    project_root = frontend_dir
+    while project_root.name != "silicon2-migration" and project_root != project_root.parent:
+        project_root = project_root.parent
 
     result: CLIResult = await worker.invoke(
         prompt=prompt,
         model="sonnet",
-        max_turns=15,
-        cwd=frontend_dir,
+        max_turns=30,  # More turns — integration is complex
+        cwd=project_root,
         allowed_tools=["Write", "Edit", "Bash", "Read"],
     )
 
     if not result.success:
         return IntegrationResult(success=False, error=result.error)
 
-    # Check what files were modified/created
+    # Check what files were modified
     modified = []
-    if frontend_dir.exists():
-        for f in frontend_dir.rglob("*.ts"):
-            if "api" in f.name.lower() or "query" in f.name.lower() or "client" in f.name.lower():
-                modified.append(str(f.relative_to(frontend_dir)))
-        for f in frontend_dir.rglob("*.tsx"):
-            modified.append(str(f.relative_to(frontend_dir)))
+    for d in [frontend_dir, backend_dir]:
+        if d and d.exists():
+            for f in d.rglob("*.java"):
+                modified.append(str(f.relative_to(project_root)))
+            for f in d.rglob("*.ts"):
+                modified.append(str(f.relative_to(project_root)))
+            for f in d.rglob("*.tsx"):
+                modified.append(str(f.relative_to(project_root)))
+            for f in d.rglob("*.yml"):
+                modified.append(str(f.relative_to(project_root)))
 
     return IntegrationResult(
         success=True,
-        files_modified=modified,
-        report={"output": result.output[:300], "cost": result.cost},
+        files_modified=modified[:30],
+        report={"output": result.output[:500], "cost": result.cost, "duration_ms": result.duration_ms},
     )

@@ -107,6 +107,17 @@ function PageDetailPage() {
     } catch {}
   }
 
+  async function retryStep(stepNumber: number) {
+    setRunning(true);
+    try {
+      await fetch("http://localhost:8000/api/pipeline/retry-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ page_id: pageId, step_number: stepNumber }),
+      });
+    } catch {}
+  }
+
   async function runAll() {
     setRunning(true);
     try {
@@ -218,6 +229,7 @@ function PageDetailPage() {
                 <th>Duration</th>
                 <th>Artifacts</th>
                 <th>Error</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -236,6 +248,16 @@ function PageDetailPage() {
                   <td>{step.artifacts.length > 0 ? step.artifacts.map((a) => a.type).join(", ") : "—"}</td>
                   <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--red)" }}>
                     {step.executions.at(-1)?.error || ""}
+                  </td>
+                  <td>
+                    <button
+                      className="btn"
+                      style={{ fontSize: 9, padding: "2px 6px" }}
+                      onClick={() => retryStep(step.step_number)}
+                      disabled={running}
+                    >
+                      Retry
+                    </button>
                   </td>
                 </tr>
               ))}

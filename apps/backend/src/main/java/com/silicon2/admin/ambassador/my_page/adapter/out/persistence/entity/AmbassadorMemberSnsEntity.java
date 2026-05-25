@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "ambassador_member_sns")
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
