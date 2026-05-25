@@ -185,15 +185,18 @@ class PipelineEngine:
 
             _set_page_state(page, PageState.RUNNING)
             page.started_at = utcnow_naive()
-            session.flush()
+            session.commit()
 
-            context = StepContext(page_id=page.id)
+            context = await self._rebuild_context(page, session)
             self._prepare_workspace(page_id, context, settings)
             event_bus.emit("pipeline:started", {"page_id": page_id})
 
             for step in self.steps:
+                if step.step_number <= page.current_step:
+                    continue
                 event_bus.emit("pipeline:step_started", {"page_id": page_id, "step": step.step_number, "step_name": step.name})
                 result = await self._execute_step(step, page, context, session)
+                session.commit()
                 if not result.success:
                     _set_page_state(page, PageState.BLOCKED)
                     session.commit()
@@ -288,6 +291,18 @@ class PipelineEngine:
     ) -> StepResult:
         for attempt in range(1, self.max_retries + 1):
             started = utcnow_naive()
+            # Mark as running immediately so Dashboard shows real-time status
+            running_exec = StepExecution(
+                page_id=page.id,
+                step_number=step.step_number,
+                step_name=step.name,
+                status="running",
+                attempt_number=attempt,
+                started_at=started,
+            )
+            session.add(running_exec)
+            session.commit()
+
             result = await step.execute(context)
             ended = utcnow_naive()
             duration_ms = int((ended - started).total_seconds() * 1000)
@@ -300,22 +315,15 @@ class PipelineEngine:
             else:
                 status = StepState.BLOCKED
 
-            execution = StepExecution(
-                page_id=page.id,
-                step_number=step.step_number,
-                step_name=step.name,
-                status=status.value,
-                attempt_number=attempt,
-                model_used=result.model_used,
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                cost=result.cost,
-                duration_ms=duration_ms,
-                error_message=result.error,
-                started_at=started,
-                completed_at=ended,
-            )
-            session.add(execution)
+            # Update the running execution with final status
+            running_exec.status = status.value
+            running_exec.model_used = result.model_used
+            running_exec.input_tokens = result.input_tokens
+            running_exec.output_tokens = result.output_tokens
+            running_exec.cost = result.cost
+            running_exec.duration_ms = duration_ms
+            running_exec.error_message = result.error
+            running_exec.completed_at = ended
 
             if result.cost > 0 or result.input_tokens > 0 or result.output_tokens > 0:
                 cost_entry = CostLog(

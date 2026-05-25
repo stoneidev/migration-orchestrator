@@ -248,11 +248,15 @@ def get_page_steps(page_id: str, db: Session = Depends(get_db)):
         if step_num <= page.current_step:
             status = "passed"
         elif step_num == page.current_step + 1 and page.migration_status == "running":
-            status = "running"
+            # Only show "running" if there's an active execution (started but not finished)
+            active_exec = [e for e in step_execs if e.status == "running"]
+            status = "running" if active_exec else "queued"
         else:
             status = "pending"
         if step_execs and step_execs[-1].status == "blocked":
             status = "blocked"
+        if step_execs and step_execs[-1].status == "passed":
+            status = "passed"
         steps_data.append({
             "step_number": step_num,
             "step_name": step_name,

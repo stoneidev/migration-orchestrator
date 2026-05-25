@@ -24,12 +24,11 @@ async def lifespan(app: FastAPI):
     event_bus.set_loop(asyncio.get_running_loop())
     from src.config import Settings
     settings = Settings()
-    # Consistency-first mode: fail fast on invalid settings or DB migration
-    # errors rather than silently writing to an unexpected fallback DB.
     configure_db(settings.database_url)
     from src.api.routes.pipeline import init_page_semaphore
     init_page_semaphore(settings.max_parallel_pages)
     log.info("page pipeline concurrency limit: %s", settings.max_parallel_pages)
+
     try:
         yield
     finally:

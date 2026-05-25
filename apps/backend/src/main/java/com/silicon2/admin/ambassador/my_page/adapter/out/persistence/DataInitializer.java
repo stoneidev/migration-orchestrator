@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
-@Component
+@Component("ambassadorDataInitializer")
 @Profile("nomysql")
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {

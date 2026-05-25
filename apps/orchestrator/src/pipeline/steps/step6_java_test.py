@@ -72,7 +72,7 @@ async def generate_java_tests(
     worker=None,
     timeout: int = 300,
 ) -> JavaTestResult:
-    """Run ``./gradlew test`` directly. No CLI required."""
+    """Run ``./gradlew test``. If tests fail, use Claude CLI to fix and re-run."""
 
     backend_root = _find_backend_root(output_dir)
     if backend_root is None:
@@ -87,6 +87,91 @@ async def generate_java_tests(
         for f in test_src.rglob("*Test.java"):
             test_files.append(str(f.relative_to(backend_root)))
 
+    # First run
+    result = await _run_gradle_test(backend_root, timeout)
+    if result is None:
+        return JavaTestResult(success=True, test_files=test_files, warning="gradle not runnable")
+
+    returncode, output = result
+    passed_count, failed_count = _parse_test_counts(output)
+
+    if returncode == 0:
+        return JavaTestResult(
+            success=True,
+            test_files=test_files,
+            tests_passed=passed_count,
+            tests_failed=0,
+            output=output[-500:],
+        )
+
+    # Tests failed — use Claude CLI to fix, repeat until success or max attempts
+    from src.workers.claude_cli import ClaudeCLIWorker, CLIResult
+
+    cli_worker = worker or ClaudeCLIWorker()
+    max_fix_attempts = 3
+    last_output = output
+
+    for fix_attempt in range(1, max_fix_attempts + 1):
+        fix_prompt = f"""The Java tests are failing ({failed_count} failed). Fix the code so ALL tests pass.
+
+## Error Output (last 2000 chars)
+```
+{last_output[-2000:]}
+```
+
+## Steps
+1. Read the failing test file(s) to understand what they expect
+2. Read the corresponding source file(s)
+3. Fix the source code (NOT the tests) so the tests pass
+4. Run `./gradlew test --no-daemon` to verify ALL tests pass
+5. If still failing, read the new error output and fix again
+6. Keep fixing until `./gradlew test` exits with 0
+
+## Rules
+- Fix the implementation, not the tests
+- If a test expects a method/class that doesn't exist, create it
+- If a test expects specific behavior, implement that behavior
+- If @DataJpaTest loads unrelated @Component beans (DataInitializer conflicts), add @ComponentScan filtering or use @Import to limit the scan scope
+- If a filename doesn't match the public interface/class name, rename the FILE (not the class)
+- You MUST run `./gradlew test` at the end and confirm it passes with 0 failures
+"""
+
+        cli_result: CLIResult = await cli_worker.invoke(
+            prompt=fix_prompt,
+            model="sonnet",
+            max_turns=15,
+            cwd=backend_root,
+            allowed_tools=["Write", "Edit", "Bash", "Read"],
+        )
+
+        # Re-run tests after fix
+        result2 = await _run_gradle_test(backend_root, timeout)
+        if result2 is None:
+            return JavaTestResult(success=True, test_files=test_files, warning="gradle not runnable after fix")
+
+        returncode2, last_output = result2
+        passed_count, failed_count = _parse_test_counts(last_output)
+
+        if returncode2 == 0:
+            return JavaTestResult(
+                success=True,
+                test_files=test_files,
+                tests_passed=passed_count,
+                tests_failed=0,
+                output=last_output[-500:],
+            )
+
+    return JavaTestResult(
+        success=False,
+        test_files=test_files,
+        tests_passed=passed_count,
+        tests_failed=failed_count or 1,
+        output=last_output[-1000:],
+        error=f"gradle test failed (exit={returncode2}, failed={failed_count})",
+    )
+
+
+async def _run_gradle_test(backend_root: Path, timeout: int) -> tuple[int, str] | None:
     try:
         completed = await asyncio.to_thread(
             subprocess.run,
@@ -96,37 +181,10 @@ async def generate_java_tests(
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired as e:
-        return JavaTestResult(
-            success=True,
-            test_files=test_files,
-            warning=f"gradle test timed out after {timeout}s",
-            output=(e.stdout or "")[-300:] if isinstance(e.stdout, str) else "",
-        )
-    except FileNotFoundError as e:
-        return JavaTestResult(
-            success=True,
-            test_files=test_files,
-            warning=f"gradle not runnable: {e}",
-        )
+    except subprocess.TimeoutExpired:
+        return None
+    except FileNotFoundError:
+        return None
 
     output = (completed.stdout or "") + (completed.stderr or "")
-    passed_count, failed_count = _parse_test_counts(output)
-
-    if completed.returncode == 0:
-        return JavaTestResult(
-            success=True,
-            test_files=test_files,
-            tests_passed=passed_count,
-            tests_failed=failed_count,
-            output=output[-500:],
-        )
-
-    return JavaTestResult(
-        success=False,
-        test_files=test_files,
-        tests_passed=passed_count,
-        tests_failed=failed_count or 1,
-        output=output[-1000:],
-        error=f"gradle test failed (exit={completed.returncode}, failed={failed_count})",
-    )
+    return completed.returncode, output

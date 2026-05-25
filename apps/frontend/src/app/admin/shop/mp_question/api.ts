@@ -48,17 +48,31 @@ export async function fetchQuestions(filters: QuestionFilters): Promise<Question
     const data = await response.json();
 
     // Transform backend response to match frontend types
-    return data.map((item: any) => ({
-      id: item.id.toString(),
-      productName: item.productName,
-      category: item.category,
-      questionText: item.questionText,
-      answerText: item.answerText,
-      userId: item.userId,
-      userName: item.userName,
-      createdAt: item.createdAt,
-      status: item.status.toLowerCase() as 'answered' | 'unanswered',
-    }));
+    return data.map((item: any) => {
+      // Format date from ISO to MM/DD/YYYY
+      let formattedDate = item.createdAt;
+      try {
+        const date = new Date(item.createdAt);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        formattedDate = `${month}/${day}/${year}`;
+      } catch (e) {
+        console.warn('Failed to format date:', item.createdAt);
+      }
+
+      return {
+        id: item.id.toString(),
+        productName: item.productName,
+        category: item.category,
+        questionText: item.questionText,
+        answerText: item.answerText,
+        userId: item.userId,
+        userName: item.userName,
+        createdAt: formattedDate,
+        status: item.status.toLowerCase() as 'answered' | 'unanswered',
+      };
+    });
   } catch (error) {
     console.warn('Failed to fetch from backend, falling back to mock data:', error);
 

@@ -148,12 +148,15 @@ class Step4ReactGen(BaseStep):
         # Find original screenshot
         screenshot_path = None
         if self.screenshots_dir:
-            page_screenshots = self.screenshots_dir / page_id.replace(".", "_")
-            candidates = [
-                page_screenshots / "original.png",
-                page_screenshots / "full_page.png",
-                page_screenshots / "step3_ambassador.png",
-            ]
+            # Try both naming conventions: dot-separated and underscore-separated
+            candidates = []
+            for folder_name in [page_id.replace(".", "_"), page_id]:
+                page_screenshots = self.screenshots_dir / folder_name
+                candidates.extend([
+                    page_screenshots / "original.png",
+                    page_screenshots / "full_page.png",
+                    page_screenshots / "step3_ambassador.png",
+                ])
             for c in candidates:
                 if c.exists():
                     screenshot_path = c

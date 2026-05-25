@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/ambassador/my-page")
+@RequestMapping("/api/ambassador/my-page")
 @RequiredArgsConstructor
 public class AmbassadorMyPageController {
 

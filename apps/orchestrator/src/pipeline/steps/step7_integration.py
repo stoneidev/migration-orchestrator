@@ -41,21 +41,27 @@ ALL interactive elements (buttons, filters, search, pagination) MUST actually wo
 - Check CORS config allows localhost:3001
 - Add `@Setter` and `@NoArgsConstructor` to JPA entities if missing
 - Create a DataInitializer class (@Profile("nomysql")) that inserts test data on startup
+  - IMPORTANT: Use @Component("pageNameDataInitializer") with a UNIQUE bean name to avoid conflicts with other modules
   - Insert at least 10 realistic test records with varied categories, dates, statuses
 - Run `./gradlew compileJava` — fix any errors
 
 ### 2. Start Backend and verify API
 - Run: `./gradlew bootRun --args='--spring.profiles.active=nomysql'` in background
-- Wait 10 seconds for startup
+- Wait 15 seconds for startup
 - Test the API endpoint with curl (check controller's @RequestMapping for actual path)
-- If it fails, read the error and fix
+- **CRITICAL: Save the curl response JSON output.** You MUST use this actual response structure to build the frontend API mapping.
+- If it fails, read the error and fix, then curl again until you get a valid JSON response.
 
-### 3. Fix Frontend API calls
+### 3. Fix Frontend API calls (MUST match actual Backend response)
 - Read the Backend Controller's `@RequestMapping` to get the actual URL paths
-- Update Frontend's `api.ts` to call the correct Backend URLs
+- **curl the endpoint and READ THE ACTUAL JSON RESPONSE STRUCTURE**
+- Create/Update Frontend's `api.ts` to map the ACTUAL response fields to frontend types
+  - Do NOT guess the response structure. Use the exact field names from the curl output.
+  - Example: if curl returns `{{"data":{{"member":{{"mbPoint":5}}}}}}`, map `data.member.mbPoint` → `summary.points`
 - The Backend has `context-path: /api` so full URL is `http://localhost:8080/api/` + controller path
 - Add fallback to mock data if Backend is unreachable (try/catch with timeout)
 - Add `AbortSignal.timeout(3000)` to fetch calls
+- **Verify the mapping works**: After creating api.ts, check that the TypeScript types match the mapped fields
 
 ### 4. Make ALL Interactive Elements Functional (CRITICAL)
 This is the most important step. Every button, filter, dropdown, and input MUST work:

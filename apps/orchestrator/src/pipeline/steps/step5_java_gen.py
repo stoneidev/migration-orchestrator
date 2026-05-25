@@ -128,17 +128,29 @@ async def generate_java(
         for br in business_rules[:15]
     )
 
-    tables = data_layer.get("tables", [])
+    raw_tables = data_layer.get("tables", [])
+    if isinstance(raw_tables, dict):
+        tables = [{"name": k, **v} if isinstance(v, dict) else {"name": k} for k, v in list(raw_tables.items())[:5]]
+    elif isinstance(raw_tables, list):
+        tables = raw_tables[:5]
+    else:
+        tables = []
     tables_summary = "\n".join(
         f"- {t.get('name', '')}"
-        for t in tables[:5]
-    ) if tables else "ambassador_member, ambassador_member_sns, ambassador_campaign_image, affiliate_member"
+        for t in tables
+    ) if tables else "No tables defined"
 
-    sql_queries = data_layer.get("queries", [])
+    raw_queries = data_layer.get("queries", [])
+    if isinstance(raw_queries, dict):
+        sql_queries = [{"id": k, **v} if isinstance(v, dict) else {"id": k} for k, v in list(raw_queries.items())[:8]]
+    elif isinstance(raw_queries, list):
+        sql_queries = raw_queries[:8]
+    else:
+        sql_queries = []
     sql_summary = "\n".join(
         f"- {q.get('id', '')}: {q.get('type', '')} {q.get('description', '')}"
-        for q in sql_queries[:8]
-    ) if sql_queries else "SELECT queries on ambassador tables"
+        for q in sql_queries
+    ) if sql_queries else "No queries defined"
 
     prompt = JAVA_TDD_PROMPT.format(
         page_id=meta.get("id", "ambassador.my_page"),

@@ -245,7 +245,18 @@ function PageDetailPage() {
                   <td className="td-mono">{step.executions.at(-1)?.model || "—"}</td>
                   <td>${(step.executions.at(-1)?.cost || 0).toFixed(4)}</td>
                   <td>{step.executions.at(-1)?.duration_ms ? `${step.executions.at(-1)!.duration_ms}ms` : "—"}</td>
-                  <td>{step.artifacts.length > 0 ? step.artifacts.map((a) => a.type).join(", ") : "—"}</td>
+                  <td style={{ maxWidth: 300 }}>
+                    {step.artifacts.length > 0 ? (
+                      <details>
+                        <summary style={{ cursor: "pointer" }}>{step.artifacts.length} files</summary>
+                        <ul style={{ fontSize: "11px", margin: "4px 0", paddingLeft: "16px", maxHeight: "120px", overflow: "auto" }}>
+                          {step.artifacts.map((a, i) => (
+                            <li key={i} title={a.path}>{a.path.split("/").pop()}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : "—"}
+                  </td>
                   <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--red)" }}>
                     {step.executions.at(-1)?.error || ""}
                   </td>
@@ -272,22 +283,50 @@ function PageDetailPage() {
           </table>
         </div>
 
-        {/* Live Events for this page */}
-        {events.filter((e) => e.data?.page_id === pageId).length > 0 && (
-          <div style={{ marginTop: 16, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
-            <h3 style={{ fontSize: 12, marginBottom: 8 }}>Live Events</h3>
-            <div style={{ maxHeight: 150, overflowY: "auto" }}>
-              {events
-                .filter((e) => e.data?.page_id === pageId)
-                .map((ev, i) => (
-                  <div key={i} style={{ padding: "4px 8px", marginBottom: 3, fontSize: 10, background: "var(--surface2)", borderRadius: 4, fontFamily: "var(--mono)" }}>
-                    <span style={{ color: "var(--accent)" }}>{ev.event}</span>{" "}
-                    <span style={{ color: "var(--text3)" }}>{JSON.stringify(ev.data)}</span>
+        {/* Live Log */}
+        <div style={{ marginTop: 16, background: "#1a1a2e", border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
+          <h3 style={{ fontSize: 12, marginBottom: 8, color: "#8892b0" }}>Live Log</h3>
+          <div style={{ maxHeight: 300, overflowY: "auto", fontFamily: "var(--mono)", fontSize: 11 }}>
+            {events.length === 0 && (
+              <div style={{ color: "#4a5568", padding: 8 }}>Waiting for events...</div>
+            )}
+            {events
+              .filter((e) => e.data?.page_id === pageId || e.event.startsWith("cli:") || e.event.startsWith("spec_gen:"))
+              .slice(-50)
+              .map((ev, i) => {
+                let icon = "•";
+                let color = "#8892b0";
+                let text = JSON.stringify(ev.data).slice(0, 120);
+                if (ev.event === "cli:tool_use") {
+                  icon = "🔧";
+                  color = "#64ffda";
+                  text = `${ev.data?.tool || ""} → ${(ev.data?.input || "").slice(0, 80)}`;
+                } else if (ev.event === "cli:text") {
+                  icon = "💬";
+                  color = "#ccd6f6";
+                  text = ev.data?.text || "";
+                } else if (ev.event.includes("step_started")) {
+                  icon = "▶";
+                  color = "#ffd700";
+                  text = `Step ${ev.data?.step} ${ev.data?.step_name || ""}`;
+                } else if (ev.event.includes("step_completed")) {
+                  icon = "✓";
+                  color = "#64ffda";
+                  text = `Step ${ev.data?.step} passed (${ev.data?.duration_ms}ms, $${ev.data?.cost?.toFixed(3) || "0"})`;
+                } else if (ev.event.includes("step_failed")) {
+                  icon = "✗";
+                  color = "#ff6b6b";
+                  text = `Step ${ev.data?.step} failed: ${ev.data?.error || ""}`;
+                }
+                return (
+                  <div key={i} style={{ padding: "3px 0", borderBottom: "1px solid #2d2d44" }}>
+                    <span style={{ marginRight: 6 }}>{icon}</span>
+                    <span style={{ color }}>{text}</span>
                   </div>
-                ))}
-            </div>
+                );
+              })}
           </div>
-        )}
+        </div>
       </div>
     </>
   );

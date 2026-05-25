@@ -31,6 +31,13 @@ class PageCapture:
     error: str = ""
 
 
+MOBILE_USER_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+)
+MOBILE_VIEWPORT = {"width": 430, "height": 932}
+
+
 class PlaywrightWorker:
     def __init__(self, base_url: str, admin_id: str, admin_pw: str, screenshots_dir: Path):
         self.base_url = base_url
@@ -53,7 +60,7 @@ class PlaywrightWorker:
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                context = await browser.new_context(viewport={"width": 1440, "height": 900})
+                context = await browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=MOBILE_USER_AGENT)
                 page = await context.new_page()
 
                 # Login
@@ -114,18 +121,28 @@ class PlaywrightWorker:
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                context = await browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
+                context = await browser.new_context(viewport={"width": viewport[0], "height": viewport[1]}, user_agent=MOBILE_USER_AGENT)
                 page = await context.new_page()
 
                 await page.goto(f"{self.base_url}{login_url_path}", timeout=60000)
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(3000)
+
+                # Try multiple selectors for email/id field
                 email = page.locator('input[name="mb_id"]:visible').first
+                if await email.count() == 0:
+                    email = page.locator('input[type="email"]:visible, input[placeholder*="Email"]:visible, input[placeholder*="email"]:visible').first
                 if await email.count() > 0:
                     await email.fill(self.admin_id)
+
+                # Password field
                 pw_field = page.locator('input[type="password"]:visible').first
                 if await pw_field.count() > 0:
                     await pw_field.fill(self.admin_pw)
+
+                # Submit button - try multiple selectors
                 submit = page.locator('input[type="submit"]:visible').first
+                if await submit.count() == 0:
+                    submit = page.locator('button:has-text("SIGN IN"):visible, button:has-text("Sign In"):visible, button:has-text("로그인"):visible').first
                 if await submit.count() > 0:
                     await submit.click()
                 await page.wait_for_timeout(5000)
@@ -168,7 +185,8 @@ class PlaywrightWorker:
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": 1440, "height": 900})
+                context = await browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=MOBILE_USER_AGENT)
+                page = await context.new_page()
                 await page.goto(react_url, wait_until="networkidle", timeout=15000)
                 await page.wait_for_timeout(500)
                 await page.screenshot(path=str(output_file), full_page=True)

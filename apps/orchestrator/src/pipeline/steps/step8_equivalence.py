@@ -111,15 +111,29 @@ def _extract_endpoints(
     search_roots: list[Path],
 ) -> list[JavaEndpoint]:
     endpoints: list[JavaEndpoint] = []
-    for file_ref in java_files:
-        path = _resolve_java_path(file_ref, search_roots)
-        if path is None:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        endpoints.extend(_extract_endpoints_from_text(text, file_label=str(path)))
+
+    # If explicit java_files provided, use them
+    if java_files:
+        for file_ref in java_files:
+            path = _resolve_java_path(file_ref, search_roots)
+            if path is None:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            endpoints.extend(_extract_endpoints_from_text(text, file_label=str(path)))
+
+    # Also scan all Controllers in search_roots (handles retry/rebuild cases)
+    if not endpoints:
+        for root in search_roots:
+            for java_path in root.rglob("*Controller.java"):
+                try:
+                    text = java_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                endpoints.extend(_extract_endpoints_from_text(text, file_label=str(java_path)))
+
     return endpoints
 
 
@@ -181,15 +195,26 @@ async def check_equivalence(
 
         if op_route:
             routes = endpoint_routes_by_method.get(op_method, set())
+            # Exact match
             if op_route in routes:
                 matched = True
                 matched_endpoints.add((op_method, op_route))
+            else:
+                # Fuzzy: ignore version prefix (/v1, /api, etc.)
+                op_route_stripped = re.sub(r"^/(?:v\d+|api)/", "/", op_route)
+                for r in routes:
+                    r_stripped = re.sub(r"^/(?:v\d+|api)/", "/", r)
+                    if op_route_stripped == r_stripped or r.endswith(op_route) or op_route.endswith(r.lstrip("/")):
+                        matched = True
+                        matched_endpoints.add((op_method, r))
+                        break
 
         if not matched and op_id:
-            normalized_id = re.sub(r"[^a-z0-9]", "", op_id.lower())
-            for file_ref in java_files:
-                base = re.sub(r"[^a-z0-9]", "", Path(file_ref).stem.lower())
-                if normalized_id and normalized_id in base:
+            # Match by keyword extraction from op_id
+            keywords = [w for w in re.split(r"[_\-.]", op_id.lower()) if w not in ("op", "get", "list", "view", "create", "update", "delete")]
+            for ep in endpoints:
+                ep_file_lower = ep.file.lower()
+                if any(kw in ep_file_lower for kw in keywords if len(kw) > 2):
                     matched = True
                     break
 

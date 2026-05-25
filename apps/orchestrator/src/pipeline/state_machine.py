@@ -43,7 +43,7 @@ VALID_PAGE_TRANSITIONS: dict[PageState, set[PageState]] = {
     PageState.RUNNING: {PageState.COMPLETE, PageState.BLOCKED, PageState.REVIEW, PageState.FAILED},
     PageState.REVIEW: {PageState.RUNNING},
     PageState.BLOCKED: {PageState.RUNNING},
-    PageState.COMPLETE: set(),
+    PageState.COMPLETE: {PageState.RUNNING},
     PageState.FAILED: {PageState.RUNNING},
 }
 
