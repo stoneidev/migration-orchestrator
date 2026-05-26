@@ -15,18 +15,10 @@ public class DeleteAccountUseCase {
     private final AccountSettingsRepository accountSettingsRepository;
 
     public void execute(DeleteAccountRequest request) {
-        // BR001: User must be authenticated (delegated to controller/security)
         AccountSettings accountSettings = accountSettingsRepository.findByMemberId(request.getMemberId())
                 .orElseThrow(() -> new IllegalArgumentException("Member not found: " + request.getMemberId()));
 
-        // BR005: Password verification required
-        if (!accountSettings.canDeleteAccount(request.getPassword())) {
-            throw new IllegalArgumentException("Password verification failed");
-        }
-
-        // BR008: Process expired points (delegated to event handler or separate service)
-        // BR007: Recalculate member points (delegated to event handler)
-
+        accountSettings.requireDeletion(request.getPassword());
         accountSettingsRepository.deleteByMemberId(request.getMemberId());
     }
 }

@@ -3,21 +3,23 @@ package com.silicon2.admin.shop.mp_settings.application;
 import com.silicon2.admin.shop.mp_settings.application.dto.DeleteAccountRequest;
 import com.silicon2.admin.shop.mp_settings.domain.model.AccountSettings;
 import com.silicon2.admin.shop.mp_settings.domain.repository.AccountSettingsRepository;
+import com.silicon2.admin.testsupport.bdd.Bdd;
+import com.silicon2.admin.testsupport.bdd.BddTest;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.BDDAssertions.thenThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
-@ExtendWith(MockitoExtension.class)
+@BddTest
+@DisplayName("DeleteAccountUseCase")
 class DeleteAccountUseCaseTest {
 
     @Mock
@@ -26,14 +28,62 @@ class DeleteAccountUseCaseTest {
     @InjectMocks
     private DeleteAccountUseCase deleteAccountUseCase;
 
-    @Test
-    @DisplayName("계정 삭제 성공")
-    void execute_success() {
-        // given
-        Long memberId = 1L;
-        String password = "correctPassword";
+    @Nested
+    @DisplayName("계정 삭제 시")
+    class WhenDeletingAccount {
 
-        AccountSettings accountSettings = AccountSettings.builder()
+        @Test
+        @DisplayName("비밀번호가 올바르면 계정을 삭제한다")
+        void shouldDeleteAccountWhenPasswordValid() {
+            Long memberId = 1L;
+            DeleteAccountRequest request = DeleteAccountRequest.builder()
+                    .memberId(memberId)
+                    .password("correctPassword")
+                    .build();
+
+            Bdd.given(() -> given(accountSettingsRepository.findByMemberId(memberId))
+                    .willReturn(Optional.of(accountSettings(memberId))));
+
+            Bdd.when(() -> deleteAccountUseCase.execute(request));
+
+            Bdd.then(() -> verify(accountSettingsRepository).deleteByMemberId(memberId));
+        }
+
+        @Test
+        @DisplayName("비밀번호 검증에 실패하면 예외를 발생시킨다")
+        void shouldRejectInvalidPassword() {
+            DeleteAccountRequest request = DeleteAccountRequest.builder()
+                    .memberId(1L)
+                    .password(null)
+                    .build();
+
+            Bdd.given(() -> given(accountSettingsRepository.findByMemberId(1L))
+                    .willReturn(Optional.of(accountSettings(1L))));
+
+            Bdd.then(() -> thenThrownBy(() -> deleteAccountUseCase.execute(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Password verification failed"));
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 회원이면 예외를 발생시킨다")
+        void shouldThrowWhenMemberNotFound() {
+            DeleteAccountRequest request = DeleteAccountRequest.builder()
+                    .memberId(999L)
+                    .password("password")
+                    .build();
+
+            Bdd.given(() -> given(accountSettingsRepository.findByMemberId(999L))
+                    .willReturn(Optional.empty()));
+
+            Bdd.then(() -> thenThrownBy(() -> deleteAccountUseCase.execute(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Member not found"));
+        }
+    }
+
+    private AccountSettings accountSettings(Long memberId) {
+        return AccountSettings.builder()
                 .memberId(memberId)
                 .email("test@example.com")
                 .name("홍길동")
@@ -43,68 +93,5 @@ class DeleteAccountUseCaseTest {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-
-        DeleteAccountRequest request = DeleteAccountRequest.builder()
-                .memberId(memberId)
-                .password(password)
-                .build();
-
-        given(accountSettingsRepository.findByMemberId(memberId))
-                .willReturn(Optional.of(accountSettings));
-
-        // when
-        deleteAccountUseCase.execute(request);
-
-        // then
-        verify(accountSettingsRepository).deleteByMemberId(memberId);
-    }
-
-    @Test
-    @DisplayName("계정 삭제 실패 - 비밀번호 검증 실패")
-    void execute_fail_invalidPassword() {
-        // given
-        Long memberId = 1L;
-        AccountSettings accountSettings = AccountSettings.builder()
-                .memberId(memberId)
-                .email("test@example.com")
-                .name("홍길동")
-                .phone("010-1234-5678")
-                .emailNotificationEnabled(true)
-                .smsNotificationEnabled(false)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-
-        DeleteAccountRequest request = DeleteAccountRequest.builder()
-                .memberId(memberId)
-                .password(null)
-                .build();
-
-        given(accountSettingsRepository.findByMemberId(memberId))
-                .willReturn(Optional.of(accountSettings));
-
-        // when & then
-        assertThatThrownBy(() -> deleteAccountUseCase.execute(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Password verification failed");
-    }
-
-    @Test
-    @DisplayName("계정 삭제 실패 - 회원 없음")
-    void execute_fail_memberNotFound() {
-        // given
-        Long memberId = 999L;
-        DeleteAccountRequest request = DeleteAccountRequest.builder()
-                .memberId(memberId)
-                .password("password")
-                .build();
-
-        given(accountSettingsRepository.findByMemberId(memberId))
-                .willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> deleteAccountUseCase.execute(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Member not found");
     }
 }

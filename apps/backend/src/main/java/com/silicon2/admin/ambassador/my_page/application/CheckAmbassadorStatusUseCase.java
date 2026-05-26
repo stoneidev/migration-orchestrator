@@ -2,7 +2,6 @@ package com.silicon2.admin.ambassador.my_page.application;
 
 import com.silicon2.admin.ambassador.my_page.application.dto.AmbassadorStatusResponse;
 import com.silicon2.admin.ambassador.my_page.domain.model.AmbassadorMember;
-import com.silicon2.admin.ambassador.my_page.domain.model.AmbassadorStatus;
 import com.silicon2.admin.ambassador.my_page.domain.repository.AmbassadorMemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,7 +22,7 @@ public class CheckAmbassadorStatusUseCase {
                 .memberId(member.getMemberId())
                 .status(member.getStatus())
                 .trackingCode(member.getTrackingCode())
-                .canAccess(member.getStatus() == AmbassadorStatus.ACTIVE)
+                .canAccess(member.canAccessPage())
                 .build();
     }
 }

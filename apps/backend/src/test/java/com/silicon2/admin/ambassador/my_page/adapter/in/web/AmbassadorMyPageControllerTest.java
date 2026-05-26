@@ -9,7 +9,9 @@ import com.silicon2.admin.ambassador.my_page.application.dto.GenerateSnsLinkRequ
 import com.silicon2.admin.ambassador.my_page.application.dto.GenerateSnsLinkResponse;
 import com.silicon2.admin.ambassador.my_page.application.dto.SubmitReviewRequest;
 import com.silicon2.admin.ambassador.my_page.domain.model.AmbassadorStatus;
+import com.silicon2.admin.testsupport.bdd.Bdd;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -17,19 +19,19 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Arrays;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.BDDMockito.willDoNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AmbassadorMyPageController.class)
-@DisplayName("AmbassadorMyPageController 테스트")
+@DisplayName("AmbassadorMyPageController")
 class AmbassadorMyPageControllerTest {
 
     @Autowired
@@ -47,75 +49,77 @@ class AmbassadorMyPageControllerTest {
     @MockBean
     private GenerateSnsLinkUseCase generateSnsLinkUseCase;
 
-    @Test
-    @DisplayName("GET /ambassador/my-page/status - 앰버서더 상태 조회 성공")
-    void checkStatus_returnsOk() throws Exception {
-        // given
-        Long memberId = 100L;
-        AmbassadorStatusResponse response = AmbassadorStatusResponse.builder()
-                .memberId(memberId)
-                .status(AmbassadorStatus.ACTIVE)
-                .trackingCode("AMB001")
-                .canAccess(true)
-                .build();
+    @Nested
+    @DisplayName("GET /ambassador/my-page/status")
+    class WhenCheckingStatus {
 
-        given(checkAmbassadorStatusUseCase.execute(eq(memberId)))
-                .willReturn(response);
+        @Test
+        @DisplayName("앰버서더 상태를 조회하면 200과 상태 데이터를 반환한다")
+        void shouldReturnAmbassadorStatus() throws Exception {
+            Bdd.given(() -> given(checkAmbassadorStatusUseCase.execute(eq(100L)))
+                    .willReturn(AmbassadorStatusResponse.builder()
+                            .memberId(100L)
+                            .status(AmbassadorStatus.ACTIVE)
+                            .trackingCode("AMB001")
+                            .canAccess(true)
+                            .build()));
 
-        // when & then
-        mockMvc.perform(get("/ambassador/my-page/status")
-                        .param("memberId", memberId.toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.memberId").value(memberId))
-                .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.trackingCode").value("AMB001"))
-                .andExpect(jsonPath("$.canAccess").value(true));
+            Bdd.when(() -> mockMvc.perform(get("/ambassador/my-page/status")
+                            .param("memberId", "100")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ACTIVE"))
+                    .andExpect(jsonPath("$.canAccess").value(true));
+        }
     }
 
-    @Test
-    @DisplayName("POST /ambassador/my-page/review - 리뷰 제출 성공")
-    void submitReview_returnsOk() throws Exception {
-        // given
-        SubmitReviewRequest request = SubmitReviewRequest.builder()
-                .memberId(100L)
-                .campaignId(1L)
-                .reviewContent("Great product!")
-                .imageUrls(Arrays.asList("img1.jpg", "img2.jpg"))
-                .build();
+    @Nested
+    @DisplayName("POST /ambassador/my-page/review")
+    class WhenSubmittingReview {
 
-        doNothing().when(submitReviewUseCase).execute(any(SubmitReviewRequest.class));
+        @Test
+        @DisplayName("리뷰를 제출하면 200을 반환한다")
+        void shouldSubmitReview() throws Exception {
+            SubmitReviewRequest request = SubmitReviewRequest.builder()
+                    .memberId(100L)
+                    .campaignId(1L)
+                    .reviewContent("Great product!")
+                    .imageUrls(List.of("img1.jpg"))
+                    .build();
 
-        // when & then
-        mockMvc.perform(post("/ambassador/my-page/review")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+            Bdd.given(() -> willDoNothing().given(submitReviewUseCase)
+                    .execute(any(SubmitReviewRequest.class)));
+
+            Bdd.when(() -> mockMvc.perform(post("/ambassador/my-page/review")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))))
+                    .andExpect(status().isOk());
+        }
     }
 
-    @Test
-    @DisplayName("POST /ambassador/my-page/sns-link - SNS 링크 생성 성공")
-    void generateSnsLink_returnsOk() throws Exception {
-        // given
-        GenerateSnsLinkRequest request = GenerateSnsLinkRequest.builder()
-                .memberId(100L)
-                .campaignId(1L)
-                .snsType("INSTAGRAM")
-                .build();
+    @Nested
+    @DisplayName("POST /ambassador/my-page/sns-link")
+    class WhenGeneratingSnsLink {
 
-        GenerateSnsLinkResponse response = GenerateSnsLinkResponse.builder()
-                .shareUrl("https://example.com/campaign/1?ref=AMB001")
-                .trackingCode("AMB001")
-                .build();
+        @Test
+        @DisplayName("SNS 링크를 생성하면 200과 링크 데이터를 반환한다")
+        void shouldGenerateSnsLink() throws Exception {
+            GenerateSnsLinkRequest request = GenerateSnsLinkRequest.builder()
+                    .memberId(100L)
+                    .campaignId(1L)
+                    .snsType("INSTAGRAM")
+                    .build();
 
-        given(generateSnsLinkUseCase.execute(any(GenerateSnsLinkRequest.class)))
-                .willReturn(response);
+            Bdd.given(() -> given(generateSnsLinkUseCase.execute(any(GenerateSnsLinkRequest.class)))
+                    .willReturn(GenerateSnsLinkResponse.builder()
+                            .shareUrl("https://example.com/campaign/1?ref=AMB001")
+                            .trackingCode("AMB001")
+                            .build()));
 
-        // when & then
-        mockMvc.perform(post("/ambassador/my-page/sns-link")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.shareUrl").value("https://example.com/campaign/1?ref=AMB001"))
-                .andExpect(jsonPath("$.trackingCode").value("AMB001"));
+            Bdd.when(() -> mockMvc.perform(post("/ambassador/my-page/sns-link")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.trackingCode").value("AMB001"));
+        }
     }
 }

@@ -6,10 +6,6 @@ import com.silicon2.admin.shop.mp_profile.domain.repository.BeautyProfileReposit
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 public class GetBeautyProfileUseCase {
@@ -27,18 +23,11 @@ public class GetBeautyProfileUseCase {
         response.setGender(profile.getGender());
         response.setAgeGroup(profile.getAgeGroup());
         response.setSkinTone(profile.getSkinTone());
-        response.setSkinConcern(parseList(profile.getSkinConcern()));
-        response.setHealthConcern(parseList(profile.getHealthConcern()));
-        response.setCleanBeautyPreferences(parseList(profile.getCleanBeautyPreferences()));
+        response.setSkinConcern(profile.getSkinConcernAsList());
+        response.setHealthConcern(profile.getHealthConcernAsList());
+        response.setCleanBeautyPreferences(profile.getCleanBeautyPreferencesAsList());
         response.setSkinType(profile.getSkinType());
-        response.setHairConcern(parseList(profile.getHairConcern()));
+        response.setHairConcern(profile.getHairConcernAsList());
         return response;
-    }
-
-    private List<String> parseList(String value) {
-        if (value == null || value.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return Arrays.asList(value.split(","));
     }
 }

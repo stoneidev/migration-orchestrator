@@ -4,21 +4,23 @@ import com.silicon2.admin.ambassador.my_page.application.dto.SubmitReviewRequest
 import com.silicon2.admin.ambassador.my_page.domain.model.AmbassadorMember;
 import com.silicon2.admin.ambassador.my_page.domain.model.AmbassadorStatus;
 import com.silicon2.admin.ambassador.my_page.domain.repository.AmbassadorMemberRepository;
+import com.silicon2.admin.testsupport.bdd.Bdd;
+import com.silicon2.admin.testsupport.bdd.BddTest;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.BDDAssertions.thenCode;
+import static org.assertj.core.api.BDDAssertions.thenThrownBy;
 import static org.mockito.BDDMockito.given;
 
-@ExtendWith(MockitoExtension.class)
+@BddTest
+@DisplayName("SubmitReviewUseCase")
 class SubmitReviewUseCaseTest {
 
     @Mock
@@ -27,92 +29,75 @@ class SubmitReviewUseCaseTest {
     @InjectMocks
     private SubmitReviewUseCase useCase;
 
-    @Test
-    @DisplayName("활성 앰버서더는 리뷰를 제출할 수 있다")
-    void activeAmbassadorCanSubmitReview() {
-        // given
-        Long memberId = 100L;
-        AmbassadorMember member = AmbassadorMember.builder()
-                .id(1L)
-                .memberId(memberId)
-                .status(AmbassadorStatus.ACTIVE)
-                .build();
+    @Nested
+    @DisplayName("리뷰 제출 시")
+    class WhenSubmittingReview {
 
-        SubmitReviewRequest request = SubmitReviewRequest.builder()
-                .memberId(memberId)
-                .campaignId(1L)
-                .reviewContent("Great product!")
-                .imageUrls(Arrays.asList("url1", "url2"))
-                .build();
+        @Test
+        @DisplayName("활성 앰버서더는 리뷰를 제출할 수 있다")
+        void shouldAllowActiveAmbassador() {
+            SubmitReviewRequest request = SubmitReviewRequest.builder()
+                    .memberId(100L)
+                    .campaignId(1L)
+                    .reviewContent("Great product!")
+                    .imageUrls(List.of("url1", "url2"))
+                    .build();
 
-        given(ambassadorMemberRepository.findByMemberId(memberId))
-                .willReturn(Optional.of(member));
+            Bdd.given(() -> given(ambassadorMemberRepository.findByMemberId(100L))
+                    .willReturn(Optional.of(AmbassadorMember.builder()
+                            .status(AmbassadorStatus.ACTIVE)
+                            .build())));
 
-        // when & then
-        assertThatCode(() -> useCase.execute(request))
-                .doesNotThrowAnyException();
-    }
+            Bdd.then(() -> thenCode(() -> useCase.execute(request)).doesNotThrowAnyException());
+        }
 
-    @Test
-    @DisplayName("비활성 앰버서더는 리뷰를 제출할 수 없다")
-    void inactiveAmbassadorCannotSubmitReview() {
-        // given
-        Long memberId = 100L;
-        AmbassadorMember member = AmbassadorMember.builder()
-                .id(1L)
-                .memberId(memberId)
-                .status(AmbassadorStatus.INACTIVE)
-                .build();
+        @Test
+        @DisplayName("비활성 앰버서더는 리뷰를 제출할 수 없다")
+        void shouldRejectInactiveAmbassador() {
+            SubmitReviewRequest request = SubmitReviewRequest.builder()
+                    .memberId(100L)
+                    .campaignId(1L)
+                    .reviewContent("Great product!")
+                    .build();
 
-        SubmitReviewRequest request = SubmitReviewRequest.builder()
-                .memberId(memberId)
-                .campaignId(1L)
-                .reviewContent("Great product!")
-                .build();
+            Bdd.given(() -> given(ambassadorMemberRepository.findByMemberId(100L))
+                    .willReturn(Optional.of(AmbassadorMember.builder()
+                            .status(AmbassadorStatus.INACTIVE)
+                            .build())));
 
-        given(ambassadorMemberRepository.findByMemberId(memberId))
-                .willReturn(Optional.of(member));
+            Bdd.then(() -> thenThrownBy(() -> useCase.execute(request))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Only active ambassadors can submit reviews"));
+        }
 
-        // when & then
-        assertThatThrownBy(() -> useCase.execute(request))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Only active ambassadors can submit reviews");
-    }
+        @Test
+        @DisplayName("이미지가 5개를 초과하면 예외를 발생시킨다")
+        void shouldRejectTooManyImages() {
+            SubmitReviewRequest request = SubmitReviewRequest.builder()
+                    .memberId(100L)
+                    .campaignId(1L)
+                    .imageUrls(List.of("1", "2", "3", "4", "5", "6"))
+                    .build();
 
-    @Test
-    @DisplayName("이미지는 최대 5개까지만 제출할 수 있다")
-    void shouldNotAllowMoreThan5Images() {
-        // given
-        SubmitReviewRequest request = SubmitReviewRequest.builder()
-                .memberId(100L)
-                .campaignId(1L)
-                .reviewContent("Great product!")
-                .imageUrls(Arrays.asList("url1", "url2", "url3", "url4", "url5", "url6"))
-                .build();
+            Bdd.then(() -> thenThrownBy(() -> useCase.execute(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Maximum 5 images allowed"));
+        }
 
-        // when & then
-        assertThatThrownBy(() -> useCase.execute(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Maximum 5 images allowed");
-    }
+        @Test
+        @DisplayName("존재하지 않는 앰버서더이면 예외를 발생시킨다")
+        void shouldThrowWhenAmbassadorNotFound() {
+            SubmitReviewRequest request = SubmitReviewRequest.builder()
+                    .memberId(999L)
+                    .campaignId(1L)
+                    .build();
 
-    @Test
-    @DisplayName("존재하지 않는 앰버서더는 리뷰를 제출할 수 없다")
-    void nonExistentAmbassadorCannotSubmitReview() {
-        // given
-        Long memberId = 999L;
-        SubmitReviewRequest request = SubmitReviewRequest.builder()
-                .memberId(memberId)
-                .campaignId(1L)
-                .reviewContent("Great product!")
-                .build();
+            Bdd.given(() -> given(ambassadorMemberRepository.findByMemberId(999L))
+                    .willReturn(Optional.empty()));
 
-        given(ambassadorMemberRepository.findByMemberId(memberId))
-                .willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> useCase.execute(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Ambassador not found");
+            Bdd.then(() -> thenThrownBy(() -> useCase.execute(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Ambassador not found"));
+        }
     }
 }

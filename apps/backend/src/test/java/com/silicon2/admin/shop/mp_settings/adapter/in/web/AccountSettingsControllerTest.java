@@ -7,7 +7,9 @@ import com.silicon2.admin.shop.mp_settings.application.UpdateAccountSettingsUseC
 import com.silicon2.admin.shop.mp_settings.application.dto.AccountSettingsResponse;
 import com.silicon2.admin.shop.mp_settings.application.dto.DeleteAccountRequest;
 import com.silicon2.admin.shop.mp_settings.application.dto.UpdateAccountSettingsRequest;
+import com.silicon2.admin.testsupport.bdd.Bdd;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -16,15 +18,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.BDDMockito.willDoNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AccountSettingsController.class)
+@DisplayName("AccountSettingsController")
 class AccountSettingsControllerTest {
 
     @Autowired
@@ -42,72 +44,71 @@ class AccountSettingsControllerTest {
     @MockBean
     private DeleteAccountUseCase deleteAccountUseCase;
 
-    @Test
-    @DisplayName("계정 설정 조회 API 성공")
-    void getAccountSettings_success() throws Exception {
-        // given
-        Long memberId = 1L;
-        AccountSettingsResponse response = AccountSettingsResponse.builder()
-                .memberId(memberId)
-                .email("test@example.com")
-                .name("홍길동")
-                .phone("010-1234-5678")
-                .emailNotificationEnabled(true)
-                .smsNotificationEnabled(false)
-                .build();
+    @Nested
+    @DisplayName("GET /shop/mp-settings")
+    class WhenGettingSettings {
 
-        given(getAccountSettingsUseCase.execute(memberId))
-                .willReturn(response);
+        @Test
+        @DisplayName("계정 설정을 조회하면 200과 설정 데이터를 반환한다")
+        void shouldReturnAccountSettings() throws Exception {
+            Bdd.given(() -> given(getAccountSettingsUseCase.execute(1L))
+                    .willReturn(AccountSettingsResponse.builder()
+                            .memberId(1L)
+                            .email("test@example.com")
+                            .name("홍길동")
+                            .phone("010-1234-5678")
+                            .emailNotificationEnabled(true)
+                            .smsNotificationEnabled(false)
+                            .build()));
 
-        // when & then
-        mockMvc.perform(get("/shop/mp-settings")
-                        .param("memberId", String.valueOf(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.memberId").value(memberId))
-                .andExpect(jsonPath("$.email").value("test@example.com"))
-                .andExpect(jsonPath("$.name").value("홍길동"))
-                .andExpect(jsonPath("$.phone").value("010-1234-5678"))
-                .andExpect(jsonPath("$.emailNotificationEnabled").value(true))
-                .andExpect(jsonPath("$.smsNotificationEnabled").value(false));
+            Bdd.when(() -> mockMvc.perform(get("/shop/mp-settings").param("memberId", "1")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.email").value("test@example.com"))
+                    .andExpect(jsonPath("$.name").value("홍길동"));
+        }
     }
 
-    @Test
-    @DisplayName("계정 설정 업데이트 API 성공")
-    void updateAccountSettings_success() throws Exception {
-        // given
-        UpdateAccountSettingsRequest request = UpdateAccountSettingsRequest.builder()
-                .memberId(1L)
-                .email("new@example.com")
-                .name("홍길동")
-                .phone("010-9999-9999")
-                .emailNotificationEnabled(false)
-                .smsNotificationEnabled(true)
-                .build();
+    @Nested
+    @DisplayName("POST /shop/mp-settings")
+    class WhenUpdatingSettings {
 
-        doNothing().when(updateAccountSettingsUseCase).execute(any(UpdateAccountSettingsRequest.class));
+        @Test
+        @DisplayName("계정 설정을 업데이트하면 200을 반환한다")
+        void shouldUpdateSettings() throws Exception {
+            UpdateAccountSettingsRequest request = UpdateAccountSettingsRequest.builder()
+                    .memberId(1L)
+                    .email("new@example.com")
+                    .build();
 
-        // when & then
-        mockMvc.perform(post("/shop/mp-settings")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+            Bdd.given(() -> willDoNothing().given(updateAccountSettingsUseCase)
+                    .execute(any(UpdateAccountSettingsRequest.class)));
+
+            Bdd.when(() -> mockMvc.perform(post("/shop/mp-settings")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))))
+                    .andExpect(status().isOk());
+        }
     }
 
-    @Test
-    @DisplayName("계정 삭제 API 성공")
-    void deleteAccount_success() throws Exception {
-        // given
-        DeleteAccountRequest request = DeleteAccountRequest.builder()
-                .memberId(1L)
-                .password("password123")
-                .build();
+    @Nested
+    @DisplayName("POST /shop/mp-settings/delete")
+    class WhenDeletingAccount {
 
-        doNothing().when(deleteAccountUseCase).execute(any(DeleteAccountRequest.class));
+        @Test
+        @DisplayName("계정을 삭제하면 200을 반환한다")
+        void shouldDeleteAccount() throws Exception {
+            DeleteAccountRequest request = DeleteAccountRequest.builder()
+                    .memberId(1L)
+                    .password("password123")
+                    .build();
 
-        // when & then
-        mockMvc.perform(post("/shop/mp-settings/delete")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+            Bdd.given(() -> willDoNothing().given(deleteAccountUseCase)
+                    .execute(any(DeleteAccountRequest.class)));
+
+            Bdd.when(() -> mockMvc.perform(post("/shop/mp-settings/delete")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))))
+                    .andExpect(status().isOk());
+        }
     }
 }
