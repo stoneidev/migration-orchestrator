@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Component("mpSettingsDataInitializer")
 @Profile("nomysql")
 @RequiredArgsConstructor
-public class DataInitializer implements CommandLineRunner {
+public class MpSettingsDataInitializer implements CommandLineRunner {
 
     private final MpSettingsMemberJpaRepository memberJpaRepository;
 

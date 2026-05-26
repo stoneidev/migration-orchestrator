@@ -1,4 +1,4 @@
-package com.silicon2.admin.shop.mp_profile.domain;
+package com.silicon2.admin.shop.mp_profile.adapter.out.persistence.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class BeautyProfile {
+public class BeautyProfileEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,19 +32,19 @@ public class BeautyProfile {
     private String skinTone;
 
     @Column(name = "skin_concern", columnDefinition = "TEXT")
-    private String skinConcern; // Stored as comma-separated values
+    private String skinConcern;
 
     @Column(name = "health_concern", columnDefinition = "TEXT")
-    private String healthConcern; // Stored as comma-separated values
+    private String healthConcern;
 
     @Column(name = "clean_beauty_preferences", columnDefinition = "TEXT")
-    private String cleanBeautyPreferences; // Stored as comma-separated values
+    private String cleanBeautyPreferences;
 
     @Column(name = "skin_type")
     private String skinType;
 
     @Column(name = "hair_concern", columnDefinition = "TEXT")
-    private String hairConcern; // Stored as comma-separated values
+    private String hairConcern;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

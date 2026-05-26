@@ -1,6 +1,6 @@
 package com.silicon2.admin.shop.mp_question.application;
 
-import com.silicon2.admin.shop.mp_question.domain.QuestionRepository;
+import com.silicon2.admin.shop.mp_question.domain.repository.QuestionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

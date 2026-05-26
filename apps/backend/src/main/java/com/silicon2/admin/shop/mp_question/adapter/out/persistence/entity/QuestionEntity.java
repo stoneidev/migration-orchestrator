@@ -1,5 +1,6 @@
-package com.silicon2.admin.shop.mp_question.domain;
+package com.silicon2.admin.shop.mp_question.adapter.out.persistence.entity;
 
+import com.silicon2.admin.shop.mp_question.domain.model.QuestionStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Question {
+public class QuestionEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

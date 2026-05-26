@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Component("ambassadorDataInitializer")
 @Profile("nomysql")
 @RequiredArgsConstructor
-public class DataInitializer implements CommandLineRunner {
+public class AmbassadorDataInitializer implements CommandLineRunner {
 
     private final AmbassadorMemberJpaRepository memberRepository;
     private final AmbassadorMemberSnsJpaRepository snsRepository;
