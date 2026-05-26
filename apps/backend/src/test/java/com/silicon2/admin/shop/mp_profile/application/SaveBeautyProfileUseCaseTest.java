@@ -2,8 +2,8 @@ package com.silicon2.admin.shop.mp_profile.application;
 
 import com.silicon2.admin.shop.mp_profile.application.dto.BeautyProfileRequest;
 import com.silicon2.admin.shop.mp_profile.application.dto.BeautyProfileResponse;
-import com.silicon2.admin.shop.mp_profile.domain.BeautyProfile;
-import com.silicon2.admin.shop.mp_profile.domain.BeautyProfileRepository;
+import com.silicon2.admin.shop.mp_profile.domain.model.BeautyProfile;
+import com.silicon2.admin.shop.mp_profile.domain.repository.BeautyProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

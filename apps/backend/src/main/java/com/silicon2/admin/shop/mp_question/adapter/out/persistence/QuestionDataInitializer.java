@@ -1,8 +1,8 @@
 package com.silicon2.admin.shop.mp_question.adapter.out.persistence;
 
-import com.silicon2.admin.shop.mp_question.domain.Question;
-import com.silicon2.admin.shop.mp_question.domain.QuestionRepository;
-import com.silicon2.admin.shop.mp_question.domain.QuestionStatus;
+import com.silicon2.admin.shop.mp_question.domain.model.Question;
+import com.silicon2.admin.shop.mp_question.domain.model.QuestionStatus;
+import com.silicon2.admin.shop.mp_question.domain.repository.QuestionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;

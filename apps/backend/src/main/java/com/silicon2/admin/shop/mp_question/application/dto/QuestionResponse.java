@@ -1,7 +1,7 @@
 package com.silicon2.admin.shop.mp_question.application.dto;
 
-import com.silicon2.admin.shop.mp_question.domain.Question;
-import com.silicon2.admin.shop.mp_question.domain.QuestionStatus;
+import com.silicon2.admin.shop.mp_question.domain.model.Question;
+import com.silicon2.admin.shop.mp_question.domain.model.QuestionStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

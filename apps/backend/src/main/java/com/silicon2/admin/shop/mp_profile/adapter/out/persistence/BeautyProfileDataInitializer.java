@@ -1,7 +1,7 @@
 package com.silicon2.admin.shop.mp_profile.adapter.out.persistence;
 
-import com.silicon2.admin.shop.mp_profile.domain.BeautyProfile;
-import com.silicon2.admin.shop.mp_profile.domain.BeautyProfileRepository;
+import com.silicon2.admin.shop.mp_profile.domain.model.BeautyProfile;
+import com.silicon2.admin.shop.mp_profile.domain.repository.BeautyProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
