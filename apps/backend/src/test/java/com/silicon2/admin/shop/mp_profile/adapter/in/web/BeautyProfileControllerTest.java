@@ -82,7 +82,7 @@ class BeautyProfileControllerTest {
                         .param("userId", userId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").isEmpty());
+                .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(getBeautyProfileUseCase).execute(userId);
     }

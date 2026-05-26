@@ -11,7 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/shop/mp-settings")
+@RequestMapping("/shop/mp-settings")
 @RequiredArgsConstructor
 public class AccountSettingsController {
 

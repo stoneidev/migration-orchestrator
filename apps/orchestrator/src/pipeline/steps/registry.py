@@ -348,11 +348,9 @@ class Step6JavaTest(BaseStep):
         page_id = safe_page_segment(context.page_id)
         java_files = context.generated_files.get("java_generation", [])
         if context.workspace_root is not None:
-            backend = ws_backend_dir(context, self.default_project_root)
-            output_dir = backend / page_id.replace(".", "/")
+            output_dir = ws_backend_dir(context, self.default_project_root)
         else:
-            output_dir = self.output_base / page_id.replace(".", "/")
-        output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir = self.output_base
 
         result = await generate_java_tests(
             spec=context.spec,

@@ -48,7 +48,7 @@ class AmbassadorMyPageControllerTest {
     private GenerateSnsLinkUseCase generateSnsLinkUseCase;
 
     @Test
-    @DisplayName("GET /api/ambassador/my-page/status - 앰버서더 상태 조회 성공")
+    @DisplayName("GET /ambassador/my-page/status - 앰버서더 상태 조회 성공")
     void checkStatus_returnsOk() throws Exception {
         // given
         Long memberId = 100L;
@@ -63,7 +63,7 @@ class AmbassadorMyPageControllerTest {
                 .willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/ambassador/my-page/status")
+        mockMvc.perform(get("/ambassador/my-page/status")
                         .param("memberId", memberId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(memberId))
@@ -73,7 +73,7 @@ class AmbassadorMyPageControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/ambassador/my-page/review - 리뷰 제출 성공")
+    @DisplayName("POST /ambassador/my-page/review - 리뷰 제출 성공")
     void submitReview_returnsOk() throws Exception {
         // given
         SubmitReviewRequest request = SubmitReviewRequest.builder()
@@ -86,14 +86,14 @@ class AmbassadorMyPageControllerTest {
         doNothing().when(submitReviewUseCase).execute(any(SubmitReviewRequest.class));
 
         // when & then
-        mockMvc.perform(post("/api/ambassador/my-page/review")
+        mockMvc.perform(post("/ambassador/my-page/review")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("POST /api/ambassador/my-page/sns-link - SNS 링크 생성 성공")
+    @DisplayName("POST /ambassador/my-page/sns-link - SNS 링크 생성 성공")
     void generateSnsLink_returnsOk() throws Exception {
         // given
         GenerateSnsLinkRequest request = GenerateSnsLinkRequest.builder()
@@ -111,7 +111,7 @@ class AmbassadorMyPageControllerTest {
                 .willReturn(response);
 
         // when & then
-        mockMvc.perform(post("/api/ambassador/my-page/sns-link")
+        mockMvc.perform(post("/ambassador/my-page/sns-link")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())

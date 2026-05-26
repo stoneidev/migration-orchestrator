@@ -2,7 +2,7 @@ package com.silicon2.admin.shop.mp_profile.adapter.in.web;
 
 import com.silicon2.admin.shop.mp_profile.application.GetBeautyProfileUseCase;
 import com.silicon2.admin.shop.mp_profile.application.SaveBeautyProfileUseCase;
-import com.silicon2.admin.shop.mp_profile.application.dto.ApiResponse;
+import com.silicon2.admin.common.response.ApiResponse;
 import com.silicon2.admin.shop.mp_profile.application.dto.BeautyProfileRequest;
 import com.silicon2.admin.shop.mp_profile.application.dto.BeautyProfileResponse;
 import lombok.RequiredArgsConstructor;

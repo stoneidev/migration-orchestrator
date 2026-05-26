@@ -60,7 +60,7 @@ class AccountSettingsControllerTest {
                 .willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/shop/mp-settings")
+        mockMvc.perform(get("/shop/mp-settings")
                         .param("memberId", String.valueOf(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(memberId))
@@ -87,7 +87,7 @@ class AccountSettingsControllerTest {
         doNothing().when(updateAccountSettingsUseCase).execute(any(UpdateAccountSettingsRequest.class));
 
         // when & then
-        mockMvc.perform(post("/api/shop/mp-settings")
+        mockMvc.perform(post("/shop/mp-settings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
@@ -105,7 +105,7 @@ class AccountSettingsControllerTest {
         doNothing().when(deleteAccountUseCase).execute(any(DeleteAccountRequest.class));
 
         // when & then
-        mockMvc.perform(post("/api/shop/mp-settings/delete")
+        mockMvc.perform(post("/shop/mp-settings/delete")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
